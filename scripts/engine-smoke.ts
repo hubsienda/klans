@@ -1,115 +1,64 @@
+import { createMatchDeck } from '../lib/cards';
 import { FACTIONS } from '../lib/factions';
 import {
   aiStep,
-  canEndTurn,
-  confirmTestudo,
-  discardFromHand,
-  endTurn,
-  isCardPlayable,
-  livingUnits,
-  newGame,
-  resolveChoice,
-  resolveHumanReaction,
-  resolveTarget,
-  selectCard,
-  toggleTestudoTarget,
+  autoResolvePending,
+  getPlayer,
+  livingUnitCount,
+  startGame,
 } from '../lib/gameEngine';
-import type { Faction, GameState } from '../lib/types';
+import { Difficulty, Faction, GameState } from '../lib/types';
 
-function resolvePending(game: GameState): GameState {
-  const pending = game.pendingAction;
-  if (!pending) return game;
-  switch (pending.kind) {
-    case 'ATTACK_TARGET': {
-      const target = livingUnits(game.computer)[0];
-      return target ? resolveTarget(game, target.id) : game;
-    }
-    case 'DEFENCE_TARGET': {
-      const target = livingUnits(game.human).find((unit) => !unit.defence);
-      return target ? resolveTarget(game, target.id) : game;
-    }
-    case 'DOCTOR_TARGET': {
-      const target = game.human.units.find((unit) => unit.state === 'DEFEATED' && !unit.isMummy);
-      return target ? resolveTarget(game, target.id) : game;
-    }
-    case 'BERSERKER_TARGET': {
-      const target = livingUnits(game.computer)[0];
-      return target ? resolveTarget(game, target.id) : game;
-    }
-    case 'TESTUDO_TARGETS': {
-      let next = game;
-      for (const unit of livingUnits(game.human).slice(0, 3)) next = toggleTestudoTarget(next, unit.id);
-      return confirmTestudo(next);
-    }
-    case 'SACK_CHOICE':
-      return resolveChoice(game, game.computer.hand.length ? 'STEAL' : 'DRAW');
-    case 'SEPPUKU_CHOICE':
-      return resolveChoice(game, game.human.hand.length >= 2 && livingUnits(game.human).length <= 2 ? 'DISCARD' : 'UNIT');
-    case 'VALHALLA_FOREIGN':
-      return resolveChoice(game, game.computer.units.some((unit) => unit.state === 'DEFEATED') ? 'HEAL' : 'DISCARD');
-    case 'REACTION': {
-      const hasDefence = game.human.hand.some((card) => card.type === 'DEFENCE') && !game.human.defenceDisabled;
-      const hasValhalla = game.human.hand.some((card) => card.name === 'VALHALLA' && card.faction === game.human.faction);
-      return resolveHumanReaction(game, hasDefence ? 'DEFENCE' : hasValhalla ? 'VALHALLA' : 'HIT');
-    }
+function assert(condition: unknown, message: string): asserts condition {
+  if (!condition) throw new Error(message);
+}
+
+for (const faction of FACTIONS) {
+  const opponent = FACTIONS.find((candidate) => candidate !== faction) as Faction;
+  const deck = createMatchDeck(faction, opponent);
+  assert(deck.length === 40, `${faction} match deck should contain 40 cards`);
+  assert(deck.filter((card) => card.faction === faction).length === 20, `${faction} should contribute 20 cards`);
+  assert(deck.filter((card) => card.type === 'ATTACK').length === 10, 'Match deck should contain 10 ATTACK cards');
+  assert(deck.filter((card) => card.type === 'DEFENCE').length === 10, 'Match deck should contain 10 DEFENCE cards');
+  for (const type of ['DOCTOR', 'SPY', 'SACK', 'SABOTAGE', 'AMBUSH'] as const) {
+    assert(deck.filter((card) => card.type === type).length === 4, `Match deck should contain 4 ${type} cards`);
   }
 }
 
-function humanStep(game: GameState): GameState {
-  if (game.pendingAction) return resolvePending(game);
-  if (game.currentPlayer !== 'HUMAN' || game.phase !== 'ACTION') return game;
-  if (game.cardsPlayedThisTurn >= 2) return endTurn(game);
-  const playable = game.human.hand.find((card) => isCardPlayable(game, 'HUMAN', card));
-  if (playable) return selectCard(game, 'HUMAN', playable.instanceId);
-  if (game.human.hand[0]) return discardFromHand(game, 'HUMAN', game.human.hand[0].instanceId);
-  return endTurn(game, true);
-}
+const runMatch = (humanFaction: Faction, computerFaction: Faction, difficulty: Difficulty): GameState => {
+  let game = startGame({ humanFaction, computerFaction, difficulty });
 
-function runMatch(human: Faction, computer: Faction, skilled: boolean): number {
-  let game = newGame(human, computer, skilled ? 'SKILLED' : 'SIMPLE', 'en');
-  for (let step = 1; step <= 3000; step += 1) {
-    if (game.winner) return step;
-    const before = JSON.stringify({
-      current: game.currentPlayer,
-      phase: game.phase,
-      pending: game.pendingAction?.kind,
-      cards: game.cardsPlayedThisTurn,
-      hands: [game.human.hand.length, game.computer.hand.length],
-      units: [livingUnits(game.human).length, livingUnits(game.computer).length],
-      deck: game.deck.length,
-      discard: game.discardPile.length,
-      turn: game.turnNumber,
-    });
-    game = game.currentPlayer === 'COMPUTER' && !game.pendingAction ? aiStep(game) : humanStep(game);
-    if (game.currentPlayer === 'HUMAN' && canEndTurn(game) && !game.pendingAction && game.cardsPlayedThisTurn >= 2) game = endTurn(game);
-    const after = JSON.stringify({
-      current: game.currentPlayer,
-      phase: game.phase,
-      pending: game.pendingAction?.kind,
-      cards: game.cardsPlayedThisTurn,
-      hands: [game.human.hand.length, game.computer.hand.length],
-      units: [livingUnits(game.human).length, livingUnits(game.computer).length],
-      deck: game.deck.length,
-      discard: game.discardPile.length,
-      turn: game.turnNumber,
-    });
-    if (before === after) throw new Error(`Stalled at step ${step}: ${human} vs ${computer} (${game.currentPlayer}, ${game.pendingAction?.kind ?? game.phase})`);
+  for (let step = 0; step < 2500 && !game.winner; step += 1) {
+    game = autoResolvePending(game);
+    if (game.winner) break;
+
+    if (game.phase === 'ACTION') {
+      game = aiStep(game, game.currentPlayer, difficulty);
+    }
   }
-  throw new Error(`No winner after 3000 steps: ${human} vs ${computer}`);
-}
 
-let matches = 0;
-let longest = 0;
-for (const human of FACTIONS) {
-  for (const computer of FACTIONS) {
-    if (human === computer) continue;
-    for (const skilled of [false, true]) {
-      for (let repeat = 0; repeat < 4; repeat += 1) {
-        const steps = runMatch(human, computer, skilled);
-        longest = Math.max(longest, steps);
-        matches += 1;
+  assert(game.winner, `${humanFaction} vs ${computerFaction} (${difficulty}) stalled without a winner`);
+  const winner = game.winner;
+  assert(livingUnitCount(game, winner) > 0, 'Winner must have at least one living unit');
+  assert(livingUnitCount(game, winner === 'HUMAN' ? 'COMPUTER' : 'HUMAN') === 0, 'Loser must have no living units');
+  assert(game.turnNumber > 0, 'Turn counter must advance');
+  assert(game.log.length > 0, 'Game log must contain entries');
+  assert(getPlayer(game, 'HUMAN').units.length === 5, 'Human must retain five unit records');
+  assert(getPlayer(game, 'COMPUTER').units.length === 5, 'Computer must retain five unit records');
+  return game;
+};
+
+let completed = 0;
+for (const humanFaction of FACTIONS) {
+  for (const computerFaction of FACTIONS) {
+    if (humanFaction === computerFaction) continue;
+    for (const difficulty of ['SIMPLE', 'SKILLED'] as Difficulty[]) {
+      for (let repetition = 0; repetition < 4; repetition += 1) {
+        runMatch(humanFaction, computerFaction, difficulty);
+        completed += 1;
       }
     }
   }
 }
-console.log(`Engine smoke test passed: ${matches} complete matches; longest ${longest} state transitions.`);
+
+console.log(`KLANS engine smoke test passed: ${completed} complete matches.`);

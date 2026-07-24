@@ -1,69 +1,127 @@
-import { CardDefinition, CardInstance, CardType, Faction, UnitCard } from './types';
-import { FACTION_UNITS } from './factions';
+import { FACTION_UNITS, FACTIONS } from './factions';
+import { CardDefinition, CardInstance, CardType, Faction, Unit } from './types';
+import { shuffle, uid } from './utils';
 
-const genericText: Record<CardType, { symbol: string; en: string; es: string }> = {
-  UNIT: { symbol: '♟', en: 'Living fighter. Last faction standing wins.', es: 'Combatiente vivo. Gana la última facción en pie.' },
-  ATTACK: { symbol: '⚔', en: 'Defeat one enemy unit unless defended.', es: 'Derrota una unidad enemiga salvo que sea defendida.' },
-  DEFENCE: { symbol: '⬡', en: 'Block one attack or protect a unit in advance.', es: 'Bloquea un ataque o protege una unidad por adelantado.' },
-  DOCTOR: { symbol: '✚', en: 'Heal one defeated unit of its own faction.', es: 'Cura una unidad derrotada de su propia facción.' },
-  SPY: { symbol: '◉', en: 'Reveal the opponent hand — or expose yours.', es: 'Revela la mano rival, o deja expuesta la tuya.' },
-  SABOTAGE: { symbol: '⚙', en: 'Force a skipped turn. It may backfire.', es: 'Obliga a perder un turno. Puede volverse en tu contra.' },
-  SACK: { symbol: '⬟', en: 'Draw or steal a card. It may help the opponent.', es: 'Roba del mazo o al rival. Puede beneficiar al oponente.' },
-  SPECIAL: { symbol: '★', en: 'Unique faction power.', es: 'Poder único de facción.' },
+const CARD_META: Record<
+  CardType,
+  { quantity: number; symbol: string; labels: { en: string; es: string }; shortText: { en: string; es: string } }
+> = {
+  ATTACK: {
+    quantity: 5,
+    symbol: '⚔',
+    labels: { en: 'Attack', es: 'Ataque' },
+    shortText: {
+      en: 'Choose a living enemy unit. The opponent may answer with DEFENCE.',
+      es: 'Elige una unidad enemiga viva. El rival puede responder con DEFENCE.',
+    },
+  },
+  DEFENCE: {
+    quantity: 5,
+    symbol: '⬡',
+    labels: { en: 'Defence', es: 'Defensa' },
+    shortText: {
+      en: 'Play only in response to ATTACK. Blocks it completely.',
+      es: 'Juega solo como respuesta a ATTACK. Lo bloquea por completo.',
+    },
+  },
+  DOCTOR: {
+    quantity: 2,
+    symbol: '✚',
+    labels: { en: 'Doctor', es: 'Médico' },
+    shortText: {
+      en: 'Restore one defeated unit belonging to this card’s faction.',
+      es: 'Recupera una unidad derrotada perteneciente a la facción de esta carta.',
+    },
+  },
+  SPY: {
+    quantity: 2,
+    symbol: '◉',
+    labels: { en: 'Spy', es: 'Espía' },
+    shortText: {
+      en: 'Inspect the opponent’s hand.',
+      es: 'Inspecciona la mano del rival.',
+    },
+  },
+  SACK: {
+    quantity: 2,
+    symbol: '♜',
+    labels: { en: 'Sack', es: 'Saqueo' },
+    shortText: {
+      en: 'Steal one random card from the opponent’s hand.',
+      es: 'Roba una carta al azar de la mano del rival.',
+    },
+  },
+  SABOTAGE: {
+    quantity: 2,
+    symbol: '⚙',
+    labels: { en: 'Sabotage', es: 'Sabotaje' },
+    shortText: {
+      en: 'The opponent skips their next turn completely.',
+      es: 'El rival pierde por completo su próximo turno.',
+    },
+  },
+  AMBUSH: {
+    quantity: 2,
+    symbol: '⌁',
+    labels: { en: 'Ambush', es: 'Emboscada' },
+    shortText: {
+      en: 'Defeat a living enemy unit. DEFENCE cannot be used.',
+      es: 'Derrota una unidad enemiga viva. No se puede usar DEFENCE.',
+    },
+  },
 };
 
-const common = (faction: Faction, type: CardType, quantity: number): CardDefinition => ({
-  id: `${faction}-${type}`,
-  faction,
-  type,
-  name: type,
-  quantity,
-  offensive: type === 'ATTACK',
-  special: false,
-  immediateOnNormalDraw: type === 'SABOTAGE',
-  symbol: genericText[type].symbol,
-  labels: { en: type, es: type },
-  shortText: { en: genericText[type].en, es: genericText[type].es },
-});
-
-const special = (faction: Faction, name: string, offensive: boolean, en: string, es: string): CardDefinition => ({
-  id: `${faction}-SPECIAL-${name}`,
-  faction,
-  type: 'SPECIAL',
-  name,
-  quantity: 1,
-  offensive,
-  special: true,
-  immediateOnNormalDraw: false,
-  symbol: '★',
-  labels: { en: name, es: name },
-  shortText: { en, es },
-});
-
-export const CARD_DEFINITIONS: CardDefinition[] = [
-  ...(['ROMAN', 'VIKING', 'EGYPT', 'SAMURAI'] as Faction[]).flatMap((faction) => [
-    common(faction, 'ATTACK', 5), common(faction, 'DEFENCE', 5), common(faction, 'DOCTOR', 2),
-    common(faction, 'SPY', 1), common(faction, 'SABOTAGE', 1), common(faction, 'SACK', 1),
-  ]),
-  special('ROMAN', 'TESTUDO', false, 'Protect up to three Romans until your next turn.', 'Protege hasta tres romanos hasta tu próximo turno.'),
-  special('ROMAN', 'GLADIATORES', true, 'Resolve a one-on-one duel.', 'Resuelve un duelo uno contra uno.'),
-  special('VIKING', 'VALHALLA', false, 'A fallen Viking takes an attacker with it.', 'Un vikingo caído arrastra consigo a un atacante.'),
-  special('VIKING', 'BERSERKER', true, 'Launch two immediate attacks.', 'Lanza dos ataques inmediatos.'),
-  special('SAMURAI', 'SEPPUKU', true, 'Force a unit defeat or two-card discard.', 'Obliga a derrotar una unidad o descartar dos cartas.'),
-  special('SAMURAI', 'BUSHIDO', false, 'Allow normal defences against offensive specials.', 'Permite defensas normales contra especiales ofensivas.'),
-  special('EGYPT', 'RA', false, 'Destroy active enemy defences.', 'Destruye las defensas enemigas activas.'),
-  special('EGYPT', 'MUMMY', false, 'Create an extra living unit.', 'Crea una unidad viva adicional.'),
+export const CARD_TYPES: CardType[] = [
+  'ATTACK',
+  'DEFENCE',
+  'DOCTOR',
+  'SPY',
+  'SACK',
+  'SABOTAGE',
+  'AMBUSH',
 ];
 
-export function createDeck(factions: Faction[]): CardInstance[] {
-  let serial = 0;
-  const cards = CARD_DEFINITIONS.filter((card) => factions.includes(card.faction));
-  return cards.flatMap((definition) => Array.from({ length: definition.quantity }, () => ({
-    ...definition,
-    instanceId: `${definition.id}-${serial++}-${Math.random().toString(36).slice(2, 7)}`,
-  })));
-}
+export const CARD_DEFINITIONS: CardDefinition[] = FACTIONS.flatMap((faction) =>
+  CARD_TYPES.map((type) => {
+    const meta = CARD_META[type];
+    return {
+      id: `${faction}-${type}`,
+      faction,
+      type,
+      name: type,
+      quantity: meta.quantity,
+      symbol: meta.symbol,
+      labels: meta.labels,
+      shortText: meta.shortText,
+    };
+  }),
+);
 
-export function createUnits(faction: Faction): UnitCard[] {
-  return FACTION_UNITS[faction].map((name) => ({ id: `${faction}-${name}`, name, faction, state: 'ALIVE' }));
-}
+export const getCardDefinition = (faction: Faction, type: CardType): CardDefinition => {
+  const definition = CARD_DEFINITIONS.find((card) => card.faction === faction && card.type === type);
+  if (!definition) throw new Error(`Missing card definition for ${faction} ${type}`);
+  return definition;
+};
+
+export const createFactionDeck = (faction: Faction): CardInstance[] =>
+  CARD_DEFINITIONS.filter((definition) => definition.faction === faction).flatMap((definition) =>
+    Array.from({ length: definition.quantity }, (_, index) => ({
+      instanceId: uid(`${definition.id.toLowerCase()}-${index + 1}`),
+      definitionId: definition.id,
+      faction: definition.faction,
+      type: definition.type,
+      name: definition.name,
+      symbol: definition.symbol,
+    })),
+  );
+
+export const createMatchDeck = (humanFaction: Faction, computerFaction: Faction): CardInstance[] =>
+  shuffle([...createFactionDeck(humanFaction), ...createFactionDeck(computerFaction)]);
+
+export const createUnits = (faction: Faction): Unit[] =>
+  FACTION_UNITS[faction].map((name) => ({
+    id: uid(`${faction.toLowerCase()}-${name.toLowerCase()}`),
+    faction,
+    name,
+    state: 'ALIVE',
+  }));

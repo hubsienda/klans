@@ -1,571 +1,691 @@
-import { createDeck, createUnits } from './cards';
-import { AttackContext, CardInstance, Difficulty, Faction, GameState, LocalisedText, PlayerId, PlayerState, UnitCard } from './types';
+import { createMatchDeck, createUnits } from './cards';
+import {
+  ActionResult,
+  CardInstance,
+  CardType,
+  Difficulty,
+  GameLogEntry,
+  GameState,
+  LocalisedText,
+  PendingAttack,
+  PlayerId,
+  PlayerState,
+  StartGameOptions,
+  Unit,
+} from './types';
 import { randomItem, shuffle, uid } from './utils';
 
-const other = (id: PlayerId): PlayerId => id === 'HUMAN' ? 'COMPUTER' : 'HUMAN';
-export const keyOf = (id: PlayerId): 'human' | 'computer' => id === 'HUMAN' ? 'human' : 'computer';
-export const playerOf = (game: GameState, id: PlayerId) => game[keyOf(id)];
+const clone = (game: GameState): GameState => structuredClone(game);
+export const opponentOf = (player: PlayerId): PlayerId => (player === 'HUMAN' ? 'COMPUTER' : 'HUMAN');
+export const playerKey = (player: PlayerId): 'human' | 'computer' => (player === 'HUMAN' ? 'human' : 'computer');
+export const getPlayer = (game: GameState, player: PlayerId): PlayerState => game[playerKey(player)];
 
-const text = (en: string, es: string): LocalisedText => ({ en, es });
-export const appendLog = (game: GameState, en: string, es: string): GameState => ({
-  ...game,
-  log: [...game.log, { id: uid(), text: text(en, es) }].slice(-80),
-});
+const actorText = (player: PlayerId): LocalisedText =>
+  player === 'HUMAN'
+    ? { en: 'You', es: 'Tú' }
+    : { en: 'Computer', es: 'El ordenador' };
 
-export function newGame(humanFaction: Faction, computerFaction: Faction, difficulty: Difficulty, language: 'en' | 'es'): GameState {
-  const shuffled = shuffle(createDeck([humanFaction, computerFaction]));
-  const humanHand = shuffled.slice(0, 4);
-  const computerHand = shuffled.slice(4, 8);
-  const deck = shuffled.slice(8);
-  const base = (id: PlayerId, faction: Faction, hand: CardInstance[]): PlayerState => ({
-    id, faction, hand, units: createUnits(faction), skipTurns: 0, defenceDisabled: false, defenceDisabledTurns: 0,
-    bushidoActive: false, testudoActive: false, mummyDoubleAttack: false, survivalUsed: false, knowsOpponentHand: false,
+const possessiveText = (player: PlayerId): LocalisedText =>
+  player === 'HUMAN'
+    ? { en: 'your', es: 'tu' }
+    : { en: "computer's", es: 'del ordenador' };
+
+const addLog = (game: GameState, text: LocalisedText): void => {
+  const entry: GameLogEntry = { id: uid('log'), ...text };
+  game.log.unshift(entry);
+  game.lastAction = text;
+  if (game.log.length > 120) game.log.length = 120;
+};
+
+const result = (state: GameState, ok: boolean, message?: LocalisedText): ActionResult => ({ state, ok, message });
+
+const fail = (game: GameState, en: string, es: string): ActionResult =>
+  result(game, false, { en, es });
+
+const aliveUnits = (player: PlayerState): Unit[] => player.units.filter((unit) => unit.state === 'ALIVE');
+const defeatedUnits = (player: PlayerState): Unit[] => player.units.filter((unit) => unit.state === 'DEFEATED');
+
+export const livingUnitCount = (game: GameState, player: PlayerId): number => aliveUnits(getPlayer(game, player)).length;
+
+const removeCard = (hand: CardInstance[], instanceId: string): CardInstance | undefined => {
+  const index = hand.findIndex((card) => card.instanceId === instanceId);
+  if (index < 0) return undefined;
+  return hand.splice(index, 1)[0];
+};
+
+const discardCardInstance = (game: GameState, card: CardInstance): void => {
+  game.discardPile.push(card);
+};
+
+const refillDeck = (game: GameState): void => {
+  if (game.deck.length > 0 || game.discardPile.length === 0) return;
+  game.deck = shuffle(game.discardPile);
+  game.discardPile = [];
+  addLog(game, {
+    en: 'The discard pile was shuffled into a new common deck.',
+    es: 'La pila de descarte se barajó para formar un nuevo mazo común.',
   });
-  let game: GameState = {
-    human: base('HUMAN', humanFaction, humanHand), computer: base('COMPUTER', computerFaction, computerHand),
-    currentPlayer: 'HUMAN', turnNumber: 1, phase: 'DRAW', deck, discardPile: [], cardsPlayedThisTurn: 0,
-    offensivePlayedThisTurn: false, specialPlayedThisTurn: false, attackLimitThisTurn: 1, attacksMadeThisTurn: 0,
-    log: [], difficulty, language, aiThinking: false,
-  };
-  game = appendLog(game, `${humanFaction} faces ${computerFaction}.`, `${humanFaction} se enfrenta a ${computerFaction}.`);
-  return beginTurn(game, 'HUMAN');
-}
+};
 
-function recycleIfNeeded(game: GameState): GameState {
-  if (game.deck.length > 0 || game.discardPile.length === 0) return game;
-  return appendLog({ ...game, deck: shuffle(game.discardPile), discardPile: [] }, 'The discard pile was shuffled into a new deck.', 'La pila de descarte se barajó para formar un nuevo mazo.');
-}
-
-export function drawCards(game: GameState, playerId: PlayerId, count = 1, normalDraw = false): GameState {
-  let next = game;
-  for (let i = 0; i < count; i += 1) {
-    next = recycleIfNeeded(next);
-    if (!next.deck.length) break;
-    const [card, ...deck] = next.deck;
-    const playerKey = keyOf(playerId);
-    next = { ...next, deck, [playerKey]: { ...next[playerKey], hand: [...next[playerKey].hand, card] } };
-    const whoEn = playerId === 'HUMAN' ? 'You' : 'Computer';
-    const whoEs = playerId === 'HUMAN' ? 'Has' : 'El ordenador ha';
-    next = appendLog(next, `${whoEn} drew ${card.name}.`, `${whoEs} robado ${card.name}.`);
-    if (normalDraw && card.immediateOnNormalDraw) next = resolveImmediateDraw(next, playerId, card);
-    if (next.phase === 'ENDED' || next.currentPlayer !== playerId) break;
-  }
-  return next;
-}
-
-function removeFromHand(game: GameState, playerId: PlayerId, cardId: string): [GameState, CardInstance | undefined] {
-  const key = keyOf(playerId); const card = game[key].hand.find((c) => c.instanceId === cardId);
-  if (!card) return [game, undefined];
-  return [{ ...game, [key]: { ...game[key], hand: game[key].hand.filter((c) => c.instanceId !== cardId) } }, card];
-}
-
-function discardCardInstance(game: GameState, card: CardInstance): GameState {
-  return { ...game, discardPile: [...game.discardPile, card] };
-}
-
-function resolveImmediateDraw(game: GameState, playerId: PlayerId, card: CardInstance): GameState {
-  if (card.type !== 'SABOTAGE') return game;
-  let next: GameState; let removed: CardInstance | undefined;
-  [next, removed] = removeFromHand(game, playerId, card.instanceId);
-  if (!removed) return game;
-  next = discardCardInstance(next, removed);
-  if (card.faction === playerOf(next, playerId).faction) {
-    const target = other(playerId); const targetKey = keyOf(target);
-    next = { ...next, [targetKey]: { ...next[targetKey], skipTurns: next[targetKey].skipTurns + 1 } };
-    return appendLog(next, `${card.faction} SABOTAGE makes the opponent skip their next turn.`, `${card.faction} SABOTAGE obliga al rival a perder su próximo turno.`);
-  }
-  const key = keyOf(playerId);
-  next = { ...next, [key]: { ...next[key], skipTurns: next[key].skipTurns + 1 } };
-  next = appendLog(next, 'Enemy SABOTAGE backfired. The current turn ends and you will skip your next turn.', 'El SABOTAGE enemigo se volvió en tu contra. El turno termina y perderás tu próximo turno.');
-  return endTurn(next, true);
-}
-
-export function beginTurn(game: GameState, playerId: PlayerId): GameState {
-  if (game.winner) return game;
-  const key = keyOf(playerId);
-  let player = game[key];
-  const units = player.units.map((unit) => ({ ...unit, protectedByTestudo: false }));
-  player = { ...player, units, testudoActive: false, bushidoActive: false, knowsOpponentHand: false };
-  let next: GameState = {
-    ...game, [key]: player, currentPlayer: playerId, phase: 'DRAW', pendingAction: undefined, cardsPlayedThisTurn: 0,
-    offensivePlayedThisTurn: false, specialPlayedThisTurn: false, attackLimitThisTurn: 1, attacksMadeThisTurn: 0,
-  };
-  if (player.skipTurns > 0) {
-    next = { ...next, [key]: { ...player, skipTurns: player.skipTurns - 1 } };
-    next = appendLog(next, playerId === 'HUMAN' ? 'You skip this turn.' : 'Computer skips this turn.', playerId === 'HUMAN' ? 'Pierdes este turno.' : 'El ordenador pierde este turno.');
-    return endTurn(next, true);
-  }
-  next = drawCards(next, playerId, 1, true);
-  if (next.currentPlayer !== playerId || next.phase === 'ENDED') return next;
-  return { ...next, phase: 'ACTION' };
-}
-
-export function canEndTurn(game: GameState): boolean {
-  return game.phase === 'ACTION' && game.currentPlayer === 'HUMAN' && game.cardsPlayedThisTurn > 0;
-}
-
-export function endTurn(game: GameState, forced = false): GameState {
-  if (game.winner) return game;
-  const current = game.currentPlayer; const key = keyOf(current); let player = game[key]; let next = game;
-  if (!forced && game.cardsPlayedThisTurn < 1) return appendLog(game, 'Play or discard at least one card before ending the turn.', 'Juega o descarta al menos una carta antes de terminar el turno.');
-  if (player.hand.length > 5) {
-    const excess = player.hand.length - 5;
-    const dropped = player.hand.slice(-excess);
-    player = { ...player, hand: player.hand.slice(0, 5) };
-    next = { ...next, [key]: player, discardPile: [...next.discardPile, ...dropped] };
-    next = appendLog(next, `${excess} card${excess > 1 ? 's were' : ' was'} discarded to respect the hand limit.`, `Se ${excess > 1 ? 'descartaron' : 'descartó'} ${excess} carta${excess > 1 ? 's' : ''} por el límite de mano.`);
-  }
-  player = next[key];
-  if (player.defenceDisabled && player.defenceDisabledTurns > 0) {
-    const turns = player.defenceDisabledTurns - 1;
-    player = { ...player, defenceDisabledTurns: turns, defenceDisabled: turns > 0 };
-  }
-  player = { ...player, survivalUsed: false };
-  const nextId = other(current);
-  next = { ...next, [key]: player, turnNumber: next.turnNumber + 1 };
-  return beginTurn(next, nextId);
-}
-
-export function livingUnits(player: PlayerState): UnitCard[] { return player.units.filter((unit) => unit.state === 'ALIVE'); }
-export function defeatedUnits(player: PlayerState): UnitCard[] { return player.units.filter((unit) => unit.state === 'DEFEATED' && !unit.isMummy); }
-
-function updatePlayer(game: GameState, playerId: PlayerId, updater: (player: PlayerState) => PlayerState): GameState {
-  const key = keyOf(playerId); return { ...game, [key]: updater(game[key]) };
-}
-
-function markCardPlayed(game: GameState, card: CardInstance): GameState {
-  return {
-    ...game, cardsPlayedThisTurn: game.cardsPlayedThisTurn + 1,
-    offensivePlayedThisTurn: game.offensivePlayedThisTurn || card.offensive,
-    specialPlayedThisTurn: game.specialPlayedThisTurn || card.type === 'SPECIAL',
-  };
-}
-
-export function isCardPlayable(game: GameState, playerId: PlayerId, card: CardInstance): boolean {
-  if (game.currentPlayer !== playerId || game.phase !== 'ACTION' || game.cardsPlayedThisTurn >= 2) return false;
-  const dynamicOffensive = card.offensive || (card.type === 'SPECIAL' && card.name === 'MUMMY' && card.faction !== playerOf(game, playerId).faction);
-  if (dynamicOffensive && game.offensivePlayedThisTurn) return false;
-  if (card.type === 'SPECIAL' && game.specialPlayedThisTurn) return false;
-  if (card.type === 'SPECIAL' && card.name === 'VALHALLA' && card.faction === playerOf(game, playerId).faction) return false;
-  if (card.type === 'ATTACK' && game.attacksMadeThisTurn >= game.attackLimitThisTurn) return false;
-  const player = playerOf(game, playerId);
-  if (card.type === 'DOCTOR' && card.faction === player.faction && defeatedUnits(player).length === 0) return false;
-  if (card.type === 'DEFENCE' && (player.defenceDisabled || !livingUnits(player).some((u) => !u.defence))) return false;
-  return true;
-}
-
-export function selectCard(game: GameState, playerId: PlayerId, cardId: string): GameState {
-  const card = playerOf(game, playerId).hand.find((item) => item.instanceId === cardId);
-  if (!card || !isCardPlayable(game, playerId, card)) return game;
-  if (card.type === 'ATTACK') return { ...game, pendingAction: { kind: 'ATTACK_TARGET', cardId } };
-  if (card.type === 'DEFENCE') return { ...game, pendingAction: { kind: 'DEFENCE_TARGET', cardId } };
-  if (card.type === 'DOCTOR' && card.faction === playerOf(game, playerId).faction) return { ...game, pendingAction: { kind: 'DOCTOR_TARGET', cardId } };
-  if (card.type === 'SACK' && card.faction === playerOf(game, playerId).faction) return { ...game, pendingAction: { kind: 'SACK_CHOICE', cardId } };
-  if (card.type === 'SPECIAL' && card.name === 'TESTUDO' && card.faction === playerOf(game, playerId).faction) return { ...game, pendingAction: { kind: 'TESTUDO_TARGETS', cardId, selected: [] } };
-  if (card.type === 'SPECIAL' && card.name === 'BERSERKER' && card.faction === playerOf(game, playerId).faction) return { ...game, pendingAction: { kind: 'BERSERKER_TARGET', cardId, remaining: 2 } };
-  if (card.type === 'SPECIAL' && card.name === 'SEPPUKU') {
-    const own = card.faction === playerOf(game, playerId).faction;
-    if (playerId === 'HUMAN' && own) {
-      let next: GameState; let played: CardInstance | undefined;
-      [next, played] = takeCardForPlay({ ...game, pendingAction: undefined }, playerId, cardId);
-      if (!played) return game;
-      next = discardCardInstance(next, played);
-      return resolveSeppukuForAi(next, 'COMPUTER');
-    }
-    return { ...game, pendingAction: { kind: 'SEPPUKU_CHOICE', cardId, ownerEffect: own } };
-  }
-  if (card.type === 'SPECIAL' && card.name === 'VALHALLA' && card.faction !== playerOf(game, playerId).faction) return { ...game, pendingAction: { kind: 'VALHALLA_FOREIGN', cardId } };
-  return resolvePlayedCard(game, playerId, cardId);
-}
-
-export function cancelPending(game: GameState): GameState { return { ...game, pendingAction: undefined }; }
-
-function takeCardForPlay(game: GameState, playerId: PlayerId, cardId: string): [GameState, CardInstance | undefined] {
-  let next: GameState; let card: CardInstance | undefined;
-  [next, card] = removeFromHand(game, playerId, cardId);
-  return card ? [markCardPlayed(next, card), card] : [game, undefined];
-}
-
-export function resolveTarget(game: GameState, unitId: string): GameState {
-  const pending = game.pendingAction; if (!pending) return game;
-  if (pending.kind === 'ATTACK_TARGET') {
-    let next: GameState; let card: CardInstance | undefined;
-    [next, card] = takeCardForPlay({ ...game, pendingAction: undefined }, game.currentPlayer, pending.cardId);
-    if (!card) return game;
-    next = { ...next, attacksMadeThisTurn: next.attacksMadeThisTurn + 1 };
-    const context: AttackContext = { attacker: game.currentPlayer, defender: other(game.currentPlayer), targetUnitId: unitId, attackCard: card, source: 'ATTACK', allowHandDefence: true, doubleHit: playerOf(next, other(game.currentPlayer)).mummyDoubleAttack };
-    return initiateAttack(next, context);
-  }
-  if (pending.kind === 'DEFENCE_TARGET') {
-    let next: GameState; let card: CardInstance | undefined;
-    [next, card] = takeCardForPlay({ ...game, pendingAction: undefined }, game.currentPlayer, pending.cardId);
-    if (!card) return game;
-    next = updatePlayer(next, game.currentPlayer, (player) => ({ ...player, units: player.units.map((unit) => unit.id === unitId ? { ...unit, defence: card } : unit) }));
-    return appendLog(next, `${card.name} was placed on ${unitId.split('-').at(-1)}.`, `${card.name} fue colocada sobre ${unitId.split('-').at(-1)}.`);
-  }
-  if (pending.kind === 'DOCTOR_TARGET') {
-    let next: GameState; let card: CardInstance | undefined;
-    [next, card] = takeCardForPlay({ ...game, pendingAction: undefined }, game.currentPlayer, pending.cardId);
-    if (!card) return game;
-    next = updatePlayer(next, game.currentPlayer, (player) => ({ ...player, units: player.units.map((unit) => unit.id === unitId ? { ...unit, state: 'ALIVE' } : unit) }));
-    next = discardCardInstance(next, card);
-    return appendLog(next, `${unitId.split('-').at(-1)} was healed.`, `${unitId.split('-').at(-1)} fue curado.`);
-  }
-  if (pending.kind === 'BERSERKER_TARGET') {
-    let next = game;
-    let card = playerOf(game, game.currentPlayer).hand.find((c) => c.instanceId === pending.cardId);
-    if (pending.remaining === 2) {
-      [next, card] = takeCardForPlay({ ...game, pendingAction: undefined }, game.currentPlayer, pending.cardId);
-      if (!card) return game;
-      next = discardCardInstance(next, card);
-    } else next = { ...game, pendingAction: undefined };
-    const remaining = pending.remaining - 1;
-    if (remaining > 0) next = { ...next, pendingAction: { kind: 'BERSERKER_TARGET', cardId: pending.cardId, remaining } };
-    const context: AttackContext = { attacker: game.currentPlayer, defender: other(game.currentPlayer), targetUnitId: unitId, source: 'BERSERKER', allowHandDefence: true };
-    return initiateAttack(next, context);
-  }
-  return game;
-}
-
-export function toggleTestudoTarget(game: GameState, unitId: string): GameState {
-  const pending = game.pendingAction; if (!pending || pending.kind !== 'TESTUDO_TARGETS') return game;
-  const selected = pending.selected.includes(unitId) ? pending.selected.filter((id) => id !== unitId) : pending.selected.length < 3 ? [...pending.selected, unitId] : pending.selected;
-  return { ...game, pendingAction: { ...pending, selected } };
-}
-
-export function confirmTestudo(game: GameState): GameState {
-  const pending = game.pendingAction; if (!pending || pending.kind !== 'TESTUDO_TARGETS' || !pending.selected.length) return game;
-  let next: GameState; let card: CardInstance | undefined;
-  [next, card] = takeCardForPlay({ ...game, pendingAction: undefined }, game.currentPlayer, pending.cardId); if (!card) return game;
-  next = updatePlayer(next, game.currentPlayer, (player) => ({ ...player, testudoActive: true, units: player.units.map((unit) => pending.selected.includes(unit.id) ? { ...unit, protectedByTestudo: true } : unit) }));
-  next = discardCardInstance(next, card);
-  return appendLog(next, 'TESTUDO protects selected Roman units until their next turn.', 'TESTUDO protege las unidades romanas elegidas hasta su próximo turno.');
-}
-
-export function resolveChoice(game: GameState, choice: string): GameState {
-  const pending = game.pendingAction; if (!pending) return game;
-  if (pending.kind === 'SACK_CHOICE') {
-    let next: GameState; let card: CardInstance | undefined;
-    [next, card] = takeCardForPlay({ ...game, pendingAction: undefined }, game.currentPlayer, pending.cardId); if (!card) return game;
-    next = discardCardInstance(next, card);
-    if (choice === 'DRAW') return drawCards(appendLog(next, 'SACK draws from the common deck.', 'SACK roba del mazo común.'), game.currentPlayer, 1, false);
-    return stealRandomCard(next, game.currentPlayer, other(game.currentPlayer));
-  }
-  if (pending.kind === 'SEPPUKU_CHOICE') {
-    let next: GameState; let card: CardInstance | undefined;
-    [next, card] = takeCardForPlay({ ...game, pendingAction: undefined }, game.currentPlayer, pending.cardId); if (!card) return game;
-    next = discardCardInstance(next, card);
-    const affected = pending.ownerEffect ? other(game.currentPlayer) : game.currentPlayer;
-    if (affected === 'COMPUTER') return resolveSeppukuForAi(next, affected);
-    if (choice === 'DISCARD' && playerOf(next, affected).hand.length >= 2) {
-      const dropped = playerOf(next, affected).hand.slice(0, 2);
-      next = updatePlayer(next, affected, (p) => ({ ...p, hand: p.hand.slice(2) }));
-      next = { ...next, discardPile: [...next.discardPile, ...dropped] };
-      return appendLog(next, 'Two cards were discarded for SEPPUKU.', 'Se descartaron dos cartas por SEPPUKU.');
-    }
-    const unit = randomItem(livingUnits(playerOf(next, affected))); return unit ? defeatUnit(next, affected, unit.id, 'SEPPUKU') : next;
-  }
-  if (pending.kind === 'VALHALLA_FOREIGN') {
-    let next: GameState; let card: CardInstance | undefined;
-    [next, card] = takeCardForPlay({ ...game, pendingAction: undefined }, game.currentPlayer, pending.cardId); if (!card) return game;
-    next = discardCardInstance(next, card);
-    if (choice === 'DISCARD') {
-      const player = playerOf(next, game.currentPlayer); const extra = randomItem(player.hand);
-      if (extra) { next = updatePlayer(next, game.currentPlayer, (p) => ({ ...p, hand: p.hand.filter((c) => c.instanceId !== extra.instanceId) })); next = discardCardInstance(next, extra); }
-      return appendLog(next, 'VALHALLA and an extra card were discarded.', 'Se descartaron VALHALLA y una carta adicional.');
-    }
-    const enemy = other(game.currentPlayer); const unit = randomItem(defeatedUnits(playerOf(next, enemy)));
-    if (unit) next = updatePlayer(next, enemy, (p) => ({ ...p, units: p.units.map((u) => u.id === unit.id ? { ...u, state: 'ALIVE' } : u) }));
-    return appendLog(next, unit ? `${unit.name} was healed by VALHALLA.` : 'VALHALLA had no defeated enemy to heal.', unit ? `${unit.name} fue curado por VALHALLA.` : 'VALHALLA no encontró un enemigo derrotado que curar.');
-  }
-  return game;
-}
-
-export function discardFromHand(game: GameState, playerId: PlayerId, cardId: string): GameState {
-  if (game.currentPlayer !== playerId || game.phase !== 'ACTION' || game.cardsPlayedThisTurn >= 2) return game;
-  let next: GameState; let card: CardInstance | undefined;
-  [next, card] = removeFromHand(game, playerId, cardId); if (!card) return game;
-  next = { ...next, cardsPlayedThisTurn: next.cardsPlayedThisTurn + 1 };
-  next = discardCardInstance(next, card);
-  next = appendLog(next, playerId === 'HUMAN' ? `You discarded ${card.name}.` : `Computer discarded ${card.name}.`, playerId === 'HUMAN' ? `Has descartado ${card.name}.` : `El ordenador descartó ${card.name}.`);
-  if (card.type === 'SABOTAGE' && card.faction !== playerOf(next, playerId).faction) {
-    const key = keyOf(playerId); next = { ...next, [key]: { ...next[key], skipTurns: next[key].skipTurns + 1 } };
-    next = appendLog(next, 'Enemy SABOTAGE backfired. You will skip your next turn.', 'El SABOTAGE enemigo se volvió en tu contra. Perderás tu próximo turno.');
-  }
-  if (card.type === 'SPY' && card.faction !== playerOf(next, playerId).faction) next = revealHand(next, playerId, other(playerId));
-  if (card.type === 'SACK' && card.faction !== playerOf(next, playerId).faction) next = stealRandomCard(next, other(playerId), playerId);
-  return next;
-}
-
-function resolvePlayedCard(game: GameState, playerId: PlayerId, cardId: string): GameState {
-  let next: GameState; let card: CardInstance | undefined;
-  [next, card] = takeCardForPlay({ ...game, pendingAction: undefined }, playerId, cardId); if (!card) return game;
-  next = discardCardInstance(next, card);
-  const own = card.faction === playerOf(next, playerId).faction;
-  if (card.type === 'SPECIAL' && card.name === 'MUMMY' && !own) next = { ...next, offensivePlayedThisTurn: true };
-  if (card.type === 'DOCTOR' && !own) return drawCards(appendLog(next, 'A foreign DOCTOR was exchanged for one card.', 'Un DOCTOR extranjero se cambió por una carta.'), playerId, 1, false);
-  if (card.type === 'SPY') return own ? revealHand(next, other(playerId), playerId) : revealHand(next, playerId, other(playerId));
-  if (card.type === 'SABOTAGE') {
-    const affected = own ? other(playerId) : playerId; const key = keyOf(affected);
-    next = { ...next, [key]: { ...next[key], skipTurns: next[key].skipTurns + 1 } };
-    return appendLog(next, own ? 'SABOTAGE makes the opponent skip their next turn.' : 'Enemy SABOTAGE backfired. You will skip your next turn.', own ? 'SABOTAGE obliga al rival a perder su próximo turno.' : 'El SABOTAGE enemigo se volvió en tu contra. Perderás tu próximo turno.');
-  }
-  if (card.type === 'SACK' && !own) return stealRandomCard(next, other(playerId), playerId);
-  if (card.type === 'SPECIAL') return resolveSpecial(next, playerId, card, own);
-  return next;
-}
-
-function revealHand(game: GameState, revealed: PlayerId, observer: PlayerId): GameState {
-  let next = updatePlayer(game, observer, (p) => ({ ...p, knowsOpponentHand: true }));
-  const names = playerOf(next, revealed).hand.map((c) => c.name).join(', ') || 'empty';
-  return appendLog(next, `${revealed === 'HUMAN' ? 'Your' : 'Computer'} hand was revealed: ${names}.`, `${revealed === 'HUMAN' ? 'Tu' : 'La'} mano ${revealed === 'HUMAN' ? '' : 'del ordenador '}fue revelada: ${names}.`);
-}
-
-function stealRandomCard(game: GameState, thief: PlayerId, victim: PlayerId): GameState {
-  const stolen = randomItem(playerOf(game, victim).hand);
-  if (!stolen) return appendLog(game, 'SACK failed because the target hand was empty.', 'SACK falló porque la mano objetivo estaba vacía.');
-  let next = updatePlayer(game, victim, (p) => ({ ...p, hand: p.hand.filter((c) => c.instanceId !== stolen.instanceId) }));
-  next = updatePlayer(next, thief, (p) => ({ ...p, hand: [...p.hand, stolen] }));
-  return appendLog(next, `${thief === 'HUMAN' ? 'You stole' : 'Computer stole'} one random card.`, `${thief === 'HUMAN' ? 'Has robado' : 'El ordenador robó'} una carta al azar.`);
-}
-
-function resolveSpecial(game: GameState, playerId: PlayerId, card: CardInstance, own: boolean): GameState {
-  let next = game;
-  if (card.name === 'TESTUDO' && !own) {
-    const affected = playerId;
-    next = updatePlayer(next, affected, (p) => ({ ...p, defenceDisabled: true, defenceDisabledTurns: 2 }));
-    return appendLog(next, 'Foreign TESTUDO disables your active defences until the end of your next turn.', 'TESTUDO extranjero desactiva tus defensas hasta el final de tu próximo turno.');
-  }
-  if (card.name === 'GLADIATORES') {
-    const currentPlayerWins = Math.random() >= 0.5;
-    const causesDefeat = own ? currentPlayerWins : !currentPlayerWins;
-    const affected = own ? other(playerId) : playerId;
-    if (causesDefeat) { const target = randomItem(livingUnits(playerOf(next, affected))); if (target) next = defeatUnit(next, affected, target.id, 'GLADIATORES'); }
-    return appendLog(next, causesDefeat ? 'The GLADIATORES duel caused a defeat.' : 'The GLADIATORES duel caused no defeat.', causesDefeat ? 'El duelo de GLADIATORES causó una derrota.' : 'El duelo de GLADIATORES no causó ninguna derrota.');
-  }
-  if (card.name === 'VALHALLA' && own) return appendLog(next, 'VALHALLA is a reaction card and was kept for a future defeat.', 'VALHALLA es una carta de reacción y se conservó para una futura derrota.');
-  if (card.name === 'BERSERKER' && !own) {
-    const attacker = other(playerId); const defender = playerId; const count = livingUnits(playerOf(next, defender)).length === 1 ? 2 : 1;
-    for (let i = 0; i < count; i += 1) { const target = randomItem(livingUnits(playerOf(next, defender))); if (target) next = initiateAttack(next, { attacker, defender, targetUnitId: target.id, source: 'BERSERKER', allowHandDefence: false }); }
-    return next;
-  }
-  if (card.name === 'BUSHIDO') {
-    if (own) next = updatePlayer(next, playerId, (p) => ({ ...p, bushidoActive: true }));
-    else next = updatePlayer(next, playerId, (p) => ({ ...p, defenceDisabled: true, defenceDisabledTurns: 2 }));
-    return appendLog(next, own ? 'BUSHIDO allows normal defences against offensive specials until your next turn.' : 'Foreign BUSHIDO disables your defences until the end of your next turn.', own ? 'BUSHIDO permite defensas normales contra especiales ofensivas hasta tu próximo turno.' : 'BUSHIDO extranjero desactiva tus defensas hasta el final de tu próximo turno.');
-  }
-  if (card.name === 'RA') {
-    const affected = own ? other(playerId) : playerId;
-    const active = playerOf(next, affected).units.flatMap((u) => u.defence ? [u.defence] : []);
-    next = updatePlayer(next, affected, (p) => ({ ...p, units: p.units.map((u) => ({ ...u, defence: undefined })), hand: own ? p.hand : p.hand.filter((c) => c.type !== 'DEFENCE') }));
-    if (!own) { const handDefences = playerOf(game, affected).hand.filter((c) => c.type === 'DEFENCE'); next = { ...next, discardPile: [...next.discardPile, ...active, ...handDefences] }; }
-    else next = { ...next, discardPile: [...next.discardPile, ...active] };
-    return appendLog(next, 'RA destroyed active defences.', 'RA destruyó las defensas activas.');
-  }
-  if (card.name === 'MUMMY') {
-    if (own) {
-      const mummy: UnitCard = { id: `${playerOf(next, playerId).faction}-MUMMY-${uid()}`, name: 'MUMMY', faction: playerOf(next, playerId).faction, state: 'ALIVE', isMummy: true };
-      next = updatePlayer(next, playerId, (p) => ({ ...p, units: [...p.units, mummy] }));
-      return appendLog(next, 'MUMMY entered play as an extra living unit.', 'MUMMY entró en juego como unidad viva adicional.');
-    }
-    next = updatePlayer(next, playerId, (p) => ({ ...p, mummyDoubleAttack: true }));
-    return appendLog(next, 'The next attack received will strike twice.', 'El próximo ataque recibido golpeará dos veces.');
-  }
-  return next;
-}
-
-export function initiateAttack(game: GameState, context: AttackContext): GameState {
-  const defender = playerOf(game, context.defender); const target = defender.units.find((u) => u.id === context.targetUnitId && u.state === 'ALIVE');
-  if (!target) return context.attackCard ? discardCardInstance(game, context.attackCard) : game;
-  let next = appendLog(game, `${context.source} targets ${target.name}.`, `${context.source} apunta a ${target.name}.`);
-  if (target.protectedByTestudo && context.source === 'ATTACK') {
-    if (context.attackCard) next = discardCardInstance(next, context.attackCard);
-    return appendLog(next, `${target.name} is protected by TESTUDO.`, `${target.name} está protegido por TESTUDO.`);
-  }
-  if (target.defence && !defender.defenceDisabled) {
-    next = updatePlayer(next, context.defender, (p) => ({ ...p, units: p.units.map((u) => u.id === target.id ? { ...u, defence: undefined } : u) }));
-    next = { ...next, discardPile: [...next.discardPile, target.defence, ...(context.attackCard ? [context.attackCard] : [])] };
-    next = appendLog(next, `${target.name}'s active DEFENCE blocked the attack.`, `La DEFENCE activa de ${target.name} bloqueó el ataque.`);
-    if (context.doubleHit) {
-      next = updatePlayer(next, context.defender, (p) => ({ ...p, mummyDoubleAttack: false }));
-      return initiateAttack(next, { ...context, attackCard: undefined, doubleHit: false });
-    }
-    return next;
-  }
-  if (livingUnits(defender).length === 1 && !defender.survivalUsed) {
-    next = updatePlayer(next, context.defender, (p) => ({ ...p, survivalUsed: true }));
-    const before = playerOf(next, context.defender).hand.length;
-    next = drawCards(next, context.defender, 1, false);
-    const drawn = playerOf(next, context.defender).hand.at(-1);
-    if (drawn && playerOf(next, context.defender).hand.length > before && drawn.type === 'DEFENCE' && !defender.defenceDisabled) {
-      let removed: CardInstance | undefined; [next, removed] = removeFromHand(next, context.defender, drawn.instanceId);
-      if (removed) next = { ...next, discardPile: [...next.discardPile, removed, ...(context.attackCard ? [context.attackCard] : [])] };
-      next = appendLog(next, 'Survival Instinct found DEFENCE and blocked the attack.', 'Instinto de Supervivencia encontró DEFENCE y bloqueó el ataque.');
-      if (context.doubleHit) {
-        next = updatePlayer(next, context.defender, (p) => ({ ...p, mummyDoubleAttack: false }));
-        return initiateAttack(next, { ...context, attackCard: undefined, doubleHit: false });
-      }
-      return next;
-    }
-    next = appendLog(next, 'Survival Instinct did not find DEFENCE.', 'Instinto de Supervivencia no encontró DEFENCE.');
-  }
-  const handDefence = defender.hand.find((c) => c.type === 'DEFENCE');
-  const valhalla = defender.hand.find((c) => c.type === 'SPECIAL' && c.name === 'VALHALLA' && c.faction === defender.faction);
-  if (context.defender === 'HUMAN' && context.allowHandDefence && !defender.defenceDisabled && (handDefence || valhalla)) return { ...next, phase: 'REACTION', pendingAction: { kind: 'REACTION', context: { ...context, valhallaEligible: Boolean(valhalla) } } };
-  if (context.defender === 'COMPUTER' && context.allowHandDefence && !defender.defenceDisabled && handDefence) {
-    const shouldDefend = game.difficulty === 'SKILLED' || Math.random() > 0.35;
-    if (shouldDefend) return resolveAiDefence(next, context, handDefence);
-  }
-  if (context.defender === 'COMPUTER' && valhalla && (game.difficulty === 'SKILLED' || Math.random() > 0.55)) return resolveAiValhalla(next, context, valhalla);
-  next = defeatUnit(next, context.defender, target.id, context.source);
-  if (context.attackCard) next = discardCardInstance(next, context.attackCard);
-  if (context.doubleHit && !next.winner) {
-    next = updatePlayer(next, context.defender, (p) => ({ ...p, mummyDoubleAttack: false }));
-    const same = playerOf(next, context.defender).units.find((u) => u.id === target.id && u.state === 'ALIVE');
-    if (same) next = initiateAttack(next, { ...context, attackCard: undefined, doubleHit: false });
-  }
-  return next;
-}
-
-function resolveAiDefence(game: GameState, context: AttackContext, defence: CardInstance): GameState {
-  let next: GameState; let removed: CardInstance | undefined; [next, removed] = removeFromHand(game, context.defender, defence.instanceId);
-  if (removed) next = { ...next, discardPile: [...next.discardPile, removed, ...(context.attackCard ? [context.attackCard] : [])] };
-  next = appendLog(next, 'Computer played DEFENCE from hand. The attack was blocked.', 'El ordenador jugó DEFENCE desde la mano. El ataque fue bloqueado.');
-  if (context.doubleHit) {
-    next = updatePlayer(next, context.defender, (p) => ({ ...p, mummyDoubleAttack: false }));
-    return initiateAttack(next, { ...context, attackCard: undefined, doubleHit: false });
-  }
-  return next;
-}
-
-function resolveAiValhalla(game: GameState, context: AttackContext, valhalla: CardInstance): GameState {
-  let next: GameState; let removed: CardInstance | undefined; [next, removed] = removeFromHand(game, context.defender, valhalla.instanceId);
-  if (removed) next = discardCardInstance(next, removed);
-  next = defeatUnit(next, context.defender, context.targetUnitId, context.source, true);
-  const retaliation = randomItem(livingUnits(playerOf(next, context.attacker)));
-  if (retaliation) next = defeatUnit(next, context.attacker, retaliation.id, 'VALHALLA');
-  if (context.attackCard) next = discardCardInstance(next, context.attackCard);
-  next = appendLog(next, 'VALHALLA caused a retaliatory defeat.', 'VALHALLA causó una derrota de represalia.');
-  if (!next.winner && livingUnits(playerOf(next, context.defender)).length === 0) next = resolveLastBreath(next, context.defender);
-  return next;
-}
-
-export function resolveHumanReaction(game: GameState, choice: 'DEFENCE' | 'VALHALLA' | 'HIT'): GameState {
-  const pending = game.pendingAction; if (!pending || pending.kind !== 'REACTION') return game;
-  const context = pending.context; let next: GameState = { ...game, pendingAction: undefined, phase: 'ACTION' };
-  const defender = playerOf(next, 'HUMAN');
-  if (choice === 'DEFENCE') {
-    const defence = defender.hand.find((c) => c.type === 'DEFENCE');
-    if (defence) {
-      let removed: CardInstance | undefined; [next, removed] = removeFromHand(next, 'HUMAN', defence.instanceId);
-      if (removed) next = { ...next, discardPile: [...next.discardPile, removed, ...(context.attackCard ? [context.attackCard] : [])] };
-      next = appendLog(next, 'You played DEFENCE from hand. The attack was blocked.', 'Has jugado DEFENCE desde la mano. El ataque fue bloqueado.');
-      if (context.doubleHit) {
-        next = updatePlayer(next, 'HUMAN', (p) => ({ ...p, mummyDoubleAttack: false }));
-        return initiateAttack(next, { ...context, attackCard: undefined, doubleHit: false });
-      }
-      return next;
-    }
-  }
-  if (choice === 'VALHALLA') {
-    const valhalla = defender.hand.find((c) => c.type === 'SPECIAL' && c.name === 'VALHALLA' && c.faction === defender.faction);
-    if (valhalla) return resolveAiValhalla(next, context, valhalla);
-  }
-  next = defeatUnit(next, 'HUMAN', context.targetUnitId, context.source);
-  if (context.attackCard) next = discardCardInstance(next, context.attackCard);
-  if (context.doubleHit) next = updatePlayer(next, 'HUMAN', (p) => ({ ...p, mummyDoubleAttack: false }));
-  return next;
-}
-
-function defeatUnit(game: GameState, playerId: PlayerId, unitId: string, source: string, suppressLastBreath = false): GameState {
-  const unit = playerOf(game, playerId).units.find((u) => u.id === unitId); if (!unit || unit.state === 'DEFEATED') return game;
-  const activeDefence = unit.defence;
-  let next = updatePlayer(game, playerId, (p) => ({ ...p, units: p.units.map((u) => u.id === unitId ? { ...u, state: 'DEFEATED', defence: undefined } : u) }));
-  if (activeDefence) next = discardCardInstance(next, activeDefence);
-  if (unit.isMummy) next = updatePlayer(next, playerId, (p) => ({ ...p, units: p.units.filter((u) => u.id !== unitId) }));
-  next = appendLog(next, `${unit.name} was defeated by ${source}.`, `${unit.name} fue derrotado por ${source}.`);
-  if (!suppressLastBreath && livingUnits(playerOf(next, playerId)).length === 0) return resolveLastBreath(next, playerId);
-  return next;
-}
-
-function resolveLastBreath(game: GameState, playerId: PlayerId): GameState {
-  let next = appendLog(game, 'Last Breath activated.', 'Último Aliento activado.');
-  next = recycleIfNeeded(next);
-  if (!next.deck.length) return declareWinner(next, other(playerId));
-  const [card, ...deck] = next.deck; next = { ...next, deck };
-  const player = playerOf(next, playerId);
-  if (card.type === 'DOCTOR' && card.faction === player.faction && defeatedUnits(player).length) {
-    const unit = defeatedUnits(player)[0];
-    next = updatePlayer(next, playerId, (p) => ({ ...p, units: p.units.map((u) => u.id === unit.id ? { ...u, state: 'ALIVE' } : u) }));
-    next = discardCardInstance(next, card);
-    return appendLog(next, `Last Breath found DOCTOR. ${unit.name} returned.`, `Último Aliento encontró DOCTOR. ${unit.name} regresó.`);
-  }
-  if (card.type === 'SPECIAL' && card.name === 'MUMMY' && card.faction === player.faction) {
-    const mummy: UnitCard = { id: `${player.faction}-MUMMY-${uid()}`, name: 'MUMMY', faction: player.faction, state: 'ALIVE', isMummy: true };
-    next = updatePlayer(next, playerId, (p) => ({ ...p, units: [...p.units, mummy] }));
-    next = discardCardInstance(next, card);
-    return appendLog(next, 'Last Breath found MUMMY and prevented elimination.', 'Último Aliento encontró MUMMY y evitó la eliminación.');
-  }
-  next = discardCardInstance(next, card);
-  return declareWinner(next, other(playerId));
-}
-
-function declareWinner(game: GameState, winner: PlayerId): GameState {
-  return appendLog({ ...game, winner, phase: 'ENDED', currentPlayer: winner, pendingAction: undefined }, `${winner === 'HUMAN' ? 'You win' : 'Computer wins'} the match.`, `${winner === 'HUMAN' ? 'Has ganado' : 'El ordenador gana'} la partida.`);
-}
-
-function resolveSeppukuForAi(game: GameState, affected: PlayerId): GameState {
-  const player = playerOf(game, affected);
-  if (player.hand.length >= 2 && livingUnits(player).length <= 2) {
-    const dropped = player.hand.slice(-2);
-    let next = updatePlayer(game, affected, (p) => ({ ...p, hand: p.hand.slice(0, -2) }));
-    next = { ...next, discardPile: [...next.discardPile, ...dropped] };
-    return appendLog(next, 'Computer discarded two cards for SEPPUKU.', 'El ordenador descartó dos cartas por SEPPUKU.');
-  }
-  const unit = randomItem(livingUnits(player)); return unit ? defeatUnit(game, affected, unit.id, 'SEPPUKU') : game;
-}
-
-export function aiStep(game: GameState): GameState {
-  if (game.currentPlayer !== 'COMPUTER' || game.phase !== 'ACTION' || game.pendingAction || game.winner) return game;
-  if (game.cardsPlayedThisTurn >= 2) return endTurn(game);
-  const ai = game.computer;
-  const ownDoctor = ai.hand.find((c) => c.type === 'DOCTOR' && c.faction === ai.faction && defeatedUnits(ai).length);
-  const spy = ai.hand.find((c) => c.type === 'SPY' && c.faction === ai.faction && !ai.knowsOpponentHand);
-  const attack = ai.hand.find((c) => c.type === 'ATTACK' && isCardPlayable(game, 'COMPUTER', c));
-  const sabotage = ai.hand.find((c) => c.type === 'SABOTAGE' && c.faction === ai.faction && isCardPlayable(game, 'COMPUTER', c));
-  const sack = ai.hand.find((c) => c.type === 'SACK' && c.faction === ai.faction && isCardPlayable(game, 'COMPUTER', c));
-  const defence = ai.hand.find((c) => c.type === 'DEFENCE' && isCardPlayable(game, 'COMPUTER', c));
-  const specialCard = ai.hand.find((c) => c.type === 'SPECIAL' && !(c.name === 'VALHALLA' && c.faction === ai.faction) && isCardPlayable(game, 'COMPUTER', c));
-  let card = ownDoctor || (game.difficulty === 'SKILLED' ? spy : undefined) || attack || sabotage || sack || defence || specialCard;
+export const drawCard = (gameInput: GameState, player: PlayerId, logDraw = true): GameState => {
+  const game = clone(gameInput);
+  refillDeck(game);
+  const card = game.deck.pop();
   if (!card) {
-    const discard = ai.hand.find((c) => c.faction !== ai.faction) || ai.hand[0];
-    return discard ? discardFromHand(game, 'COMPUTER', discard.instanceId) : endTurn(game, true);
+    addLog(game, {
+      en: 'No card could be drawn because both deck and discard pile are empty.',
+      es: 'No se pudo robar ninguna carta porque el mazo y el descarte están vacíos.',
+    });
+    return game;
   }
+  getPlayer(game, player).hand.push(card);
+  if (logDraw) {
+    const actor = actorText(player);
+    addLog(game, {
+      en: `${actor.en} drew ${card.type}.`,
+      es: player === 'HUMAN' ? `Has robado ${card.type}.` : `El ordenador robó ${card.type}.`,
+    });
+  }
+  return game;
+};
+
+const drawOpeningHand = (gameInput: GameState, player: PlayerId, count: number): GameState => {
+  let game = gameInput;
+  for (let index = 0; index < count; index += 1) game = drawCard(game, player, false);
+  return game;
+};
+
+const startTurn = (gameInput: GameState, requestedPlayer: PlayerId): GameState => {
+  let game = clone(gameInput);
+  let player = requestedPlayer;
+
+  for (let guard = 0; guard < 4; guard += 1) {
+    const state = getPlayer(game, player);
+    game.currentPlayer = player;
+    game.actionsUsedThisTurn = 0;
+    game.phase = 'ACTION';
+    game.pendingAttack = undefined;
+    game.pendingPassive = undefined;
+    game.turnNumber += 1;
+
+    if (state.skipNextTurn) {
+      state.skipNextTurn = false;
+      const actor = actorText(player);
+      addLog(game, {
+        en: `${actor.en} skipped the turn because of SABOTAGE.`,
+        es: player === 'HUMAN'
+          ? 'Has perdido el turno por SABOTAGE.'
+          : 'El ordenador perdió el turno por SABOTAGE.',
+      });
+      player = opponentOf(player);
+      continue;
+    }
+
+    game = drawCard(game, player, true);
+    const actor = actorText(player);
+    addLog(game, {
+      en: `${actor.en} began turn ${game.turnNumber}.`,
+      es: player === 'HUMAN'
+        ? `Has comenzado el turno ${game.turnNumber}.`
+        : `El ordenador comenzó el turno ${game.turnNumber}.`,
+    });
+    return game;
+  }
+
+  return game;
+};
+
+export const startGame = (options: StartGameOptions): GameState => {
+  if (options.humanFaction === options.computerFaction) {
+    throw new Error('Human and computer factions must be different.');
+  }
+
+  let game: GameState = {
+    human: {
+      faction: options.humanFaction,
+      hand: [],
+      units: createUnits(options.humanFaction),
+      skipNextTurn: false,
+      passiveUsed: false,
+    },
+    computer: {
+      faction: options.computerFaction,
+      hand: [],
+      units: createUnits(options.computerFaction),
+      skipNextTurn: false,
+      passiveUsed: false,
+    },
+    currentPlayer: 'HUMAN',
+    turnNumber: 0,
+    phase: 'ACTION',
+    deck: createMatchDeck(options.humanFaction, options.computerFaction),
+    discardPile: [],
+    actionsUsedThisTurn: 0,
+    revealComputerHand: false,
+    computerKnowsHumanHand: false,
+    difficulty: options.difficulty,
+    log: [],
+  };
+
+  game = drawOpeningHand(game, 'HUMAN', 5);
+  game = drawOpeningHand(game, 'COMPUTER', 5);
+  addLog(game, {
+    en: `${options.humanFaction} faces ${options.computerFaction}. Each side begins with five units and five cards.`,
+    es: `${options.humanFaction} se enfrenta a ${options.computerFaction}. Cada bando comienza con cinco unidades y cinco cartas.`,
+  });
+  return startTurn(game, 'HUMAN');
+};
+
+export const canAct = (game: GameState, player: PlayerId): boolean =>
+  !game.winner && game.phase === 'ACTION' && game.currentPlayer === player && game.actionsUsedThisTurn < 2;
+
+export const validTargetsForCard = (game: GameState, player: PlayerId, card: CardInstance): Unit[] => {
+  if (card.type === 'ATTACK' || card.type === 'AMBUSH') return aliveUnits(getPlayer(game, opponentOf(player)));
+  if (card.type === 'DOCTOR' && card.faction === getPlayer(game, player).faction) return defeatedUnits(getPlayer(game, player));
+  return [];
+};
+
+export const canPlayCard = (game: GameState, player: PlayerId, card: CardInstance): boolean => {
+  if (!canAct(game, player)) return false;
+  if (!getPlayer(game, player).hand.some((item) => item.instanceId === card.instanceId)) return false;
+  if (card.type === 'DEFENCE') return false;
+  if (card.type === 'DOCTOR') return validTargetsForCard(game, player, card).length > 0;
+  if (card.type === 'ATTACK' || card.type === 'AMBUSH') return validTargetsForCard(game, player, card).length > 0;
+  return true;
+};
+
+const checkVictoryMutable = (game: GameState): void => {
+  const humanAlive = aliveUnits(game.human).length;
+  const computerAlive = aliveUnits(game.computer).length;
+  if (humanAlive > 0 && computerAlive > 0) return;
+
+  game.winner = humanAlive > 0 ? 'HUMAN' : 'COMPUTER';
+  game.phase = 'GAME_OVER';
+  const winner = getPlayer(game, game.winner);
+  addLog(game, {
+    en: `${winner.faction} won the match. In Solo Playtest Edition, conquest equals victory.`,
+    es: `${winner.faction} ganó la partida. En Solo Playtest Edition, la conquista equivale a la victoria.`,
+  });
+};
+
+export const checkVictory = (gameInput: GameState): GameState => {
+  const game = clone(gameInput);
+  checkVictoryMutable(game);
+  return game;
+};
+
+const discardRandomFromHand = (game: GameState, player: PlayerId, reason: LocalisedText): CardInstance | undefined => {
+  const state = getPlayer(game, player);
+  const card = randomItem(state.hand);
+  if (!card) return undefined;
+  removeCard(state.hand, card.instanceId);
+  discardCardInstance(game, card);
+  addLog(game, {
+    en: `${actorText(player).en} discarded a random ${card.type} because of ${reason.en}.`,
+    es: player === 'HUMAN'
+      ? `Has descartado al azar ${card.type} por ${reason.es}.`
+      : `El ordenador descartó al azar ${card.type} por ${reason.es}.`,
+  });
+  return card;
+};
+
+const triggerSamuraiHonour = (game: GameState, defeatedPlayer: PlayerId, attacker: PlayerId): void => {
+  const defender = getPlayer(game, defeatedPlayer);
+  if (defender.faction !== 'SAMURAI' || defender.passiveUsed) return;
+  if (getPlayer(game, attacker).hand.length === 0) {
+    addLog(game, {
+      en: 'SAMURAI Honour could not trigger because the attacker had no cards.',
+      es: 'Honor SAMURAI no pudo activarse porque el atacante no tenía cartas.',
+    });
+    return;
+  }
+  defender.passiveUsed = true;
+  discardRandomFromHand(game, attacker, { en: 'SAMURAI Honour', es: 'Honor SAMURAI' });
+  addLog(game, {
+    en: 'SAMURAI Honour was used.',
+    es: 'Se utilizó Honor SAMURAI.',
+  });
+};
+
+const defeatUnitMutable = (game: GameState, attack: PendingAttack): boolean => {
+  const defender = getPlayer(game, attack.defender);
+  const unit = defender.units.find((item) => item.id === attack.targetUnitId && item.state === 'ALIVE');
+  if (!unit) return false;
+  unit.state = 'DEFEATED';
+  addLog(game, {
+    en: `${unit.name} was defeated by ${attack.source}.`,
+    es: `${unit.name} fue derrotado por ${attack.source}.`,
+  });
+  triggerSamuraiHonour(game, attack.defender, attack.attacker);
+  checkVictoryMutable(game);
+  return true;
+};
+
+const maybeTriggerVikingFury = (game: GameState, attacker: PlayerId, source: 'ATTACK' | 'AMBUSH'): void => {
+  if (game.winner || source !== 'ATTACK') return;
+  const player = getPlayer(game, attacker);
+  if (player.faction !== 'VIKING' || player.passiveUsed) return;
+
+  if (attacker === 'HUMAN') {
+    game.phase = 'AWAIT_PASSIVE';
+    game.pendingPassive = { player: attacker, kind: 'VIKING_FURY' };
+    return;
+  }
+
+  const shouldUse = player.hand.length < 5 || livingUnitCount(game, 'HUMAN') <= 2;
+  if (!shouldUse) return;
+  player.passiveUsed = true;
+  const drawn = drawCard(game, attacker, false);
+  Object.assign(game, drawn);
+  addLog(game, {
+    en: 'VIKING Fury drew one extra card.',
+    es: 'Furia VIKING robó una carta adicional.',
+  });
+};
+
+const resolveHitMutable = (game: GameState, attack: PendingAttack): void => {
+  const defender = getPlayer(game, attack.defender);
+  if (attack.source === 'ATTACK' && defender.faction === 'ROMAN' && !defender.passiveUsed) {
+    if (attack.defender === 'HUMAN') {
+      game.phase = 'AWAIT_PASSIVE';
+      game.pendingAttack = attack;
+      game.pendingPassive = { player: attack.defender, kind: 'ROMAN_DISCIPLINE', attack };
+      return;
+    }
+    defender.passiveUsed = true;
+    addLog(game, {
+      en: 'ROMAN Discipline ignored the defeat.',
+      es: 'Disciplina ROMAN ignoró la derrota.',
+    });
+    return;
+  }
+
+  const defeated = defeatUnitMutable(game, attack);
+  if (defeated) maybeTriggerVikingFury(game, attack.attacker, attack.source);
+};
+
+const finishAttackAgainstComputer = (game: GameState, attack: PendingAttack): void => {
+  const defender = getPlayer(game, 'COMPUTER');
+  const defence = defender.hand.find((card) => card.type === 'DEFENCE');
+  if (attack.source === 'ATTACK' && defence) {
+    removeCard(defender.hand, defence.instanceId);
+    discardCardInstance(game, defence);
+    addLog(game, {
+      en: 'Computer played DEFENCE. The attack was blocked.',
+      es: 'El ordenador jugó DEFENCE. El ataque fue bloqueado.',
+    });
+    return;
+  }
+  resolveHitMutable(game, attack);
+};
+
+const useCardMutable = (game: GameState, player: PlayerId, card: CardInstance): void => {
+  removeCard(getPlayer(game, player).hand, card.instanceId);
+  discardCardInstance(game, card);
+  game.actionsUsedThisTurn += 1;
+};
+
+export const playCard = (
+  gameInput: GameState,
+  player: PlayerId,
+  cardInstanceId: string,
+  targetUnitId?: string,
+): ActionResult => {
+  const game = clone(gameInput);
+  const state = getPlayer(game, player);
+  const card = state.hand.find((item) => item.instanceId === cardInstanceId);
+  if (!card) return fail(gameInput, 'That card is not in your hand.', 'Esa carta no está en tu mano.');
+  if (!canPlayCard(game, player, card)) {
+    return fail(gameInput, 'That card cannot be played now.', 'Esa carta no se puede jugar ahora.');
+  }
+
+  const actor = actorText(player);
+
+  if (card.type === 'ATTACK' || card.type === 'AMBUSH') {
+    const target = validTargetsForCard(game, player, card).find((unit) => unit.id === targetUnitId);
+    if (!target) return fail(gameInput, 'Select a valid living enemy unit.', 'Selecciona una unidad enemiga viva válida.');
+    useCardMutable(game, player, card);
+    addLog(game, {
+      en: `${actor.en} played ${card.type} against ${target.name}.`,
+      es: player === 'HUMAN'
+        ? `Has jugado ${card.type} contra ${target.name}.`
+        : `El ordenador jugó ${card.type} contra ${target.name}.`,
+    });
+    const attack: PendingAttack = {
+      attacker: player,
+      defender: opponentOf(player),
+      targetUnitId: target.id,
+      source: card.type,
+    };
+
+    if (attack.defender === 'HUMAN' && attack.source === 'ATTACK') {
+      const defenceAvailable = getPlayer(game, 'HUMAN').hand.some((item) => item.type === 'DEFENCE');
+      if (defenceAvailable) {
+        game.phase = 'AWAIT_DEFENCE';
+        game.pendingAttack = attack;
+        addLog(game, {
+          en: 'You may play DEFENCE or accept the attack.',
+          es: 'Puedes jugar DEFENCE o aceptar el ataque.',
+        });
+        return result(game, true);
+      }
+    }
+
+    if (attack.defender === 'COMPUTER') finishAttackAgainstComputer(game, attack);
+    else resolveHitMutable(game, attack);
+    return result(game, true);
+  }
+
   if (card.type === 'DOCTOR') {
-    const unit = defeatedUnits(ai)[0]; let next = selectCard(game, 'COMPUTER', card.instanceId); return unit ? resolveTarget(next, unit.id) : discardFromHand(game, 'COMPUTER', card.instanceId);
+    const target = validTargetsForCard(game, player, card).find((unit) => unit.id === targetUnitId);
+    if (!target) return fail(gameInput, 'Select a defeated unit of the Doctor’s faction.', 'Selecciona una unidad derrotada de la facción del Doctor.');
+    useCardMutable(game, player, card);
+    target.state = 'ALIVE';
+    addLog(game, {
+      en: `${actor.en} played DOCTOR and restored ${target.name}.`,
+      es: player === 'HUMAN'
+        ? `Has jugado DOCTOR y recuperado a ${target.name}.`
+        : `El ordenador jugó DOCTOR y recuperó a ${target.name}.`,
+    });
+
+    if (state.faction === 'EGYPT' && !state.passiveUsed) {
+      if (player === 'HUMAN') {
+        game.phase = 'AWAIT_PASSIVE';
+        game.pendingPassive = { player, kind: 'EGYPT_RESTORATION' };
+      } else {
+        state.passiveUsed = true;
+        const drawn = drawCard(game, player, false);
+        Object.assign(game, drawn);
+        addLog(game, {
+          en: 'EGYPT Restoration drew one extra card.',
+          es: 'Restauración EGYPT robó una carta adicional.',
+        });
+      }
+    }
+    return result(game, true);
   }
-  if (card.type === 'ATTACK') {
-    const targets = livingUnits(game.human).sort((a, b) => Number(Boolean(a.defence || a.protectedByTestudo)) - Number(Boolean(b.defence || b.protectedByTestudo)));
-    const target = targets[0]; let next = selectCard(game, 'COMPUTER', card.instanceId); return target ? resolveTarget(next, target.id) : endTurn(game, true);
+
+  useCardMutable(game, player, card);
+
+  if (card.type === 'SPY') {
+    if (player === 'HUMAN') game.revealComputerHand = true;
+    else game.computerKnowsHumanHand = true;
+    addLog(game, {
+      en: `${actor.en} played SPY and inspected ${possessiveText(opponentOf(player)).en} hand.`,
+      es: player === 'HUMAN'
+        ? 'Has jugado SPY y has inspeccionado la mano del ordenador.'
+        : 'El ordenador jugó SPY e inspeccionó tu mano.',
+    });
   }
-  if (card.type === 'DEFENCE') {
-    const target = livingUnits(ai).find((u) => !u.defence); let next = selectCard(game, 'COMPUTER', card.instanceId); return target ? resolveTarget(next, target.id) : discardFromHand(game, 'COMPUTER', card.instanceId);
-  }
+
   if (card.type === 'SACK') {
-    let next = selectCard(game, 'COMPUTER', card.instanceId); return resolveChoice(next, game.human.hand.length ? 'STEAL' : 'DRAW');
+    const opponent = getPlayer(game, opponentOf(player));
+    const stolen = randomItem(opponent.hand);
+    if (stolen) {
+      removeCard(opponent.hand, stolen.instanceId);
+      state.hand.push(stolen);
+      addLog(game, {
+        en: `${actor.en} played SACK and stole a random ${stolen.type}.`,
+        es: player === 'HUMAN'
+          ? `Has jugado SACK y robado al azar ${stolen.type}.`
+          : `El ordenador jugó SACK y robó al azar ${stolen.type}.`,
+      });
+    } else {
+      addLog(game, {
+        en: `${actor.en} played SACK, but the opponent had no cards.`,
+        es: player === 'HUMAN'
+          ? 'Has jugado SACK, pero el ordenador no tenía cartas.'
+          : 'El ordenador jugó SACK, pero no tenías cartas.',
+      });
+    }
   }
-  if (card.type === 'SPECIAL' && card.name === 'TESTUDO' && card.faction === ai.faction) {
-    let next = selectCard(game, 'COMPUTER', card.instanceId); const units = livingUnits(ai).slice(0, 3); units.forEach((u) => { next = toggleTestudoTarget(next, u.id); }); return confirmTestudo(next);
+
+  if (card.type === 'SABOTAGE') {
+    getPlayer(game, opponentOf(player)).skipNextTurn = true;
+    addLog(game, {
+      en: `${actor.en} played SABOTAGE. The opponent will skip the next turn.`,
+      es: player === 'HUMAN'
+        ? 'Has jugado SABOTAGE. El ordenador perderá su próximo turno.'
+        : 'El ordenador jugó SABOTAGE. Perderás tu próximo turno.',
+    });
   }
-  if (card.type === 'SPECIAL' && card.name === 'BERSERKER' && card.faction === ai.faction) {
-    let next = selectCard(game, 'COMPUTER', card.instanceId); for (let i = 0; i < 2 && !next.winner; i += 1) { const target = randomItem(livingUnits(next.human)); if (target) next = resolveTarget(next, target.id); } return next;
+
+  return result(game, true);
+};
+
+export const resolveDefence = (gameInput: GameState, useDefence: boolean): ActionResult => {
+  const game = clone(gameInput);
+  const attack = game.pendingAttack;
+  if (game.phase !== 'AWAIT_DEFENCE' || !attack || attack.defender !== 'HUMAN') {
+    return fail(gameInput, 'No attack is awaiting a defence.', 'No hay ningún ataque esperando una defensa.');
   }
-  if (card.type === 'SPECIAL' && card.name === 'SEPPUKU') {
-    const next = selectCard(game, 'COMPUTER', card.instanceId);
-    return card.faction === ai.faction ? next : resolveChoice(next, ai.hand.length >= 2 && livingUnits(ai).length <= 2 ? 'DISCARD' : 'UNIT');
+
+  game.pendingAttack = undefined;
+  game.phase = 'ACTION';
+  if (useDefence) {
+    const defence = game.human.hand.find((card) => card.type === 'DEFENCE');
+    if (!defence) return fail(gameInput, 'No DEFENCE card is available.', 'No hay ninguna carta DEFENCE disponible.');
+    removeCard(game.human.hand, defence.instanceId);
+    discardCardInstance(game, defence);
+    addLog(game, {
+      en: 'You played DEFENCE. The attack was blocked.',
+      es: 'Has jugado DEFENCE. El ataque fue bloqueado.',
+    });
+    return result(game, true);
   }
-  if (card.type === 'SPECIAL' && card.name === 'VALHALLA' && card.faction !== ai.faction) {
-    let next = selectCard(game, 'COMPUTER', card.instanceId); return resolveChoice(next, defeatedUnits(game.human).length ? 'HEAL' : 'DISCARD');
+
+  resolveHitMutable(game, attack);
+  return result(game, true);
+};
+
+export const resolvePassive = (gameInput: GameState, usePassive: boolean): ActionResult => {
+  const game = clone(gameInput);
+  const pending = game.pendingPassive;
+  if (game.phase !== 'AWAIT_PASSIVE' || !pending || pending.player !== 'HUMAN') {
+    return fail(gameInput, 'No passive ability is awaiting a decision.', 'No hay ninguna habilidad pasiva esperando una decisión.');
   }
-  return selectCard(game, 'COMPUTER', card.instanceId);
-}
+
+  game.pendingPassive = undefined;
+  game.phase = 'ACTION';
+
+  if (pending.kind === 'ROMAN_DISCIPLINE') {
+    const attack = pending.attack;
+    game.pendingAttack = undefined;
+    if (!attack) return fail(gameInput, 'The pending attack is missing.', 'Falta el ataque pendiente.');
+    if (usePassive) {
+      game.human.passiveUsed = true;
+      addLog(game, {
+        en: 'ROMAN Discipline prevented the unit from being defeated.',
+        es: 'Disciplina ROMAN evitó que la unidad fuera derrotada.',
+      });
+      return result(game, true);
+    }
+    const defeated = defeatUnitMutable(game, attack);
+    if (defeated) maybeTriggerVikingFury(game, attack.attacker, attack.source);
+    return result(game, true);
+  }
+
+  if (!usePassive) {
+    addLog(game, {
+      en: 'You kept the passive ability available for later.',
+      es: 'Has conservado la habilidad pasiva para más adelante.',
+    });
+    return result(game, true);
+  }
+
+  game.human.passiveUsed = true;
+  const drawn = drawCard(game, 'HUMAN', false);
+  Object.assign(game, drawn);
+  addLog(game, pending.kind === 'VIKING_FURY'
+    ? { en: 'VIKING Fury drew one extra card.', es: 'Furia VIKING robó una carta adicional.' }
+    : { en: 'EGYPT Restoration drew one extra card.', es: 'Restauración EGYPT robó una carta adicional.' });
+  return result(game, true);
+};
+
+const applyEnemyDiscardPenalty = (game: GameState, player: PlayerId, card: CardInstance): void => {
+  const owner = getPlayer(game, player);
+  if (card.faction === owner.faction) return;
+
+  if (card.type === 'SPY') {
+    if (player === 'HUMAN') game.computerKnowsHumanHand = true;
+    else game.revealComputerHand = true;
+    addLog(game, {
+      en: `${actorText(player).en} discarded an enemy SPY and revealed the hand.`,
+      es: player === 'HUMAN'
+        ? 'Has descartado un SPY enemigo y revelado tu mano.'
+        : 'El ordenador descartó un SPY enemigo y reveló su mano.',
+    });
+  }
+
+  if (card.type === 'SACK') {
+    const opponent = opponentOf(player);
+    const remaining = getPlayer(game, player).hand;
+    const stolen = randomItem(remaining);
+    if (stolen) {
+      removeCard(remaining, stolen.instanceId);
+      getPlayer(game, opponent).hand.push(stolen);
+      addLog(game, {
+        en: `${actorText(opponent).en} stole a random ${stolen.type} because an enemy SACK was discarded.`,
+        es: opponent === 'HUMAN'
+          ? `Has robado al azar ${stolen.type} porque el ordenador descartó un SACK enemigo.`
+          : `El ordenador robó al azar ${stolen.type} porque descartaste un SACK enemigo.`,
+      });
+    } else {
+      addLog(game, {
+        en: 'The enemy SACK penalty had no effect because the discarding hand was empty.',
+        es: 'La penalización del SACK enemigo no tuvo efecto porque la mano quedó vacía.',
+      });
+    }
+  }
+
+  if (card.type === 'SABOTAGE') {
+    owner.skipNextTurn = true;
+    addLog(game, {
+      en: `${actorText(player).en} discarded an enemy SABOTAGE and will skip the next turn.`,
+      es: player === 'HUMAN'
+        ? 'Has descartado un SABOTAGE enemigo y perderás tu próximo turno.'
+        : 'El ordenador descartó un SABOTAGE enemigo y perderá su próximo turno.',
+    });
+  }
+};
+
+export const discardCard = (gameInput: GameState, player: PlayerId, cardInstanceId: string): ActionResult => {
+  const game = clone(gameInput);
+  if (!canAct(game, player)) return fail(gameInput, 'You cannot discard now.', 'No puedes descartar ahora.');
+  const state = getPlayer(game, player);
+  const card = removeCard(state.hand, cardInstanceId);
+  if (!card) return fail(gameInput, 'That card is not in the hand.', 'Esa carta no está en la mano.');
+  discardCardInstance(game, card);
+  game.actionsUsedThisTurn += 1;
+  addLog(game, {
+    en: `${actorText(player).en} discarded ${card.type}.`,
+    es: player === 'HUMAN' ? `Has descartado ${card.type}.` : `El ordenador descartó ${card.type}.`,
+  });
+  applyEnemyDiscardPenalty(game, player, card);
+  return result(game, true);
+};
+
+export const endTurn = (gameInput: GameState, player: PlayerId): ActionResult => {
+  const game = clone(gameInput);
+  if (game.winner) return fail(gameInput, 'The match has already ended.', 'La partida ya ha terminado.');
+  if (game.currentPlayer !== player || game.phase !== 'ACTION') {
+    return fail(gameInput, 'The turn cannot end during another action.', 'El turno no puede terminar durante otra acción.');
+  }
+  if (game.actionsUsedThisTurn < 1) {
+    return fail(gameInput, 'Play or discard at least one card before ending the turn.', 'Juega o descarta al menos una carta antes de terminar el turno.');
+  }
+  return result(startTurn(game, opponentOf(player)), true);
+};
+
+const playableCards = (game: GameState, player: PlayerId): CardInstance[] =>
+  getPlayer(game, player).hand.filter((card) => canPlayCard(game, player, card));
+
+const chooseTarget = (game: GameState, player: PlayerId, card: CardInstance, skilled: boolean): Unit | undefined => {
+  const targets = validTargetsForCard(game, player, card);
+  if (!skilled) return randomItem(targets);
+  return targets[0];
+};
+
+const chooseComputerCard = (game: GameState): CardInstance | undefined => {
+  const player = game.computer;
+  const cards = playableCards(game, 'COMPUTER');
+  const byType = (type: CardType) => cards.find((card) => card.type === type);
+  const ownDoctor = cards.find((card) => card.type === 'DOCTOR' && card.faction === player.faction);
+
+  if (game.difficulty === 'SIMPLE') {
+    return ownDoctor
+      ?? byType('ATTACK')
+      ?? byType('AMBUSH')
+      ?? byType('SABOTAGE')
+      ?? byType('SACK')
+      ?? byType('SPY');
+  }
+
+  const humanAlive = livingUnitCount(game, 'HUMAN');
+  const computerAlive = livingUnitCount(game, 'COMPUTER');
+  const humanHasDefence = game.computerKnowsHumanHand && game.human.hand.some((card) => card.type === 'DEFENCE');
+
+  if (ownDoctor && (computerAlive <= 2 || computerAlive < humanAlive)) return ownDoctor;
+  if (!game.computerKnowsHumanHand && byType('SPY')) return byType('SPY');
+  if (humanHasDefence && byType('AMBUSH')) return byType('AMBUSH');
+  if (humanAlive <= 2 && byType('ATTACK')) return byType('ATTACK');
+  if (game.human.hand.length >= 4 && byType('SACK')) return byType('SACK');
+  if (humanAlive > computerAlive && byType('SABOTAGE')) return byType('SABOTAGE');
+  return byType('ATTACK')
+    ?? byType('AMBUSH')
+    ?? ownDoctor
+    ?? byType('SABOTAGE')
+    ?? byType('SACK')
+    ?? byType('SPY');
+};
+
+export const aiStep = (gameInput: GameState, player: PlayerId = 'COMPUTER', difficulty?: Difficulty): GameState => {
+  let game = clone(gameInput);
+  if (game.winner || game.phase !== 'ACTION' || game.currentPlayer !== player) return game;
+  if (difficulty) game.difficulty = difficulty;
+
+  if (game.actionsUsedThisTurn >= 2) return endTurn(game, player).state;
+
+  const card = player === 'COMPUTER'
+    ? chooseComputerCard(game)
+    : playableCards(game, player)[0];
+
+  if (card) {
+    const target = chooseTarget(game, player, card, game.difficulty === 'SKILLED');
+    const played = playCard(game, player, card.instanceId, target?.id);
+    game = played.state;
+  } else {
+    const state = getPlayer(game, player);
+    const discard = game.difficulty === 'SKILLED'
+      ? state.hand.find((item) => item.type === 'DOCTOR' && item.faction !== state.faction)
+        ?? state.hand.find((item) => !['SPY', 'SACK', 'SABOTAGE'].includes(item.type) || item.faction === state.faction)
+        ?? state.hand[0]
+      : randomItem(state.hand);
+    if (discard) game = discardCard(game, player, discard.instanceId).state;
+  }
+
+  if (game.winner || game.phase !== 'ACTION') return game;
+  if (game.actionsUsedThisTurn >= 2) return endTurn(game, player).state;
+
+  const stillUseful = playableCards(game, player).length > 0;
+  if (!stillUseful || game.actionsUsedThisTurn >= 1 && Math.random() < 0.25) {
+    return endTurn(game, player).state;
+  }
+  return game;
+};
+
+export const autoResolvePending = (gameInput: GameState): GameState => {
+  let game = gameInput;
+  if (game.phase === 'AWAIT_DEFENCE') {
+    const useDefence = game.human.hand.some((card) => card.type === 'DEFENCE');
+    game = resolveDefence(game, useDefence).state;
+  }
+  if (game.phase === 'AWAIT_PASSIVE') game = resolvePassive(game, true).state;
+  return game;
+};
+
+export const closeComputerHandReveal = (gameInput: GameState): GameState => {
+  const game = clone(gameInput);
+  game.revealComputerHand = false;
+  return game;
+};
