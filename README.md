@@ -35,7 +35,7 @@ npm run test:engine
 npm run build
 ```
 
-The engine smoke test plays 96 complete automated matches across every faction pairing and both computer difficulty levels.
+The engine smoke test plays 96 complete automated matches across every faction pairing and both computer difficulty levels. GitHub Actions repeats the type-check, engine suite and production build under Node.js 24.
 
 ## Vercel
 
