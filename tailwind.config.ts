@@ -5,11 +5,11 @@ const config: Config = {
   content: ['./app/**/*.{js,ts,jsx,tsx,mdx}', './components/**/*.{js,ts,jsx,tsx,mdx}'],
   theme: {
     extend: {
+      boxShadow: {
+        card: '0 12px 35px rgba(24, 23, 20, 0.055)',
+      },
       fontFamily: {
         cinzel: ['Cinzel', 'Georgia', 'serif'],
-      },
-      boxShadow: {
-        card: '0 12px 35px rgba(26, 24, 20, 0.08)',
       },
     },
   },

@@ -9,9 +9,44 @@ export const FACTION_UNITS: Record<Faction, string[]> = {
   SAMURAI: ['HANZO', 'KOJIRO', 'MUSASHI', 'RYU', 'TADAKATSU'],
 };
 
-export const FACTION_META: Record<Faction, { symbol: string; colour: string; soft: string; description: LocalisedText }> = {
-  ROMAN: { symbol: '◆', colour: '#A33A32', soft: '#F8E8E2', description: { en: 'Discipline, protection and decisive duels.', es: 'Disciplina, protección y duelos decisivos.' } },
-  VIKING: { symbol: 'ᛉ', colour: '#426A89', soft: '#E5EEF5', description: { en: 'Retaliation, pressure and fearless attacks.', es: 'Represalia, presión y ataques sin miedo.' } },
-  EGYPT: { symbol: '☥', colour: '#188B88', soft: '#E2F4F1', description: { en: 'Control, stripped defences and an extra unit.', es: 'Control, defensas anuladas y una unidad adicional.' } },
-  SAMURAI: { symbol: '✦', colour: '#5D4A7A', soft: '#EEE9F5', description: { en: 'Sacrifice, honour and tactical resistance.', es: 'Sacrificio, honor y resistencia táctica.' } },
+export const FACTION_META: Record<
+  Faction,
+  { colour: string; symbol: string; passiveName: LocalisedText; passiveText: LocalisedText }
+> = {
+  ROMAN: {
+    colour: '#B53A32',
+    symbol: '◆',
+    passiveName: { en: 'Discipline', es: 'Disciplina' },
+    passiveText: {
+      en: 'Once per match, ignore a defeat caused by ATTACK.',
+      es: 'Una vez por partida, ignora una derrota causada por ATTACK.',
+    },
+  },
+  VIKING: {
+    colour: '#3F6E91',
+    symbol: 'ᛉ',
+    passiveName: { en: 'Fury', es: 'Furia' },
+    passiveText: {
+      en: 'Once per match, draw a card after ATTACK defeats an enemy unit.',
+      es: 'Una vez por partida, roba una carta después de que ATTACK derrote una unidad enemiga.',
+    },
+  },
+  EGYPT: {
+    colour: '#168F91',
+    symbol: '☥',
+    passiveName: { en: 'Restoration', es: 'Restauración' },
+    passiveText: {
+      en: 'Once per match, draw a card after DOCTOR restores a unit.',
+      es: 'Una vez por partida, roba una carta después de que DOCTOR recupere una unidad.',
+    },
+  },
+  SAMURAI: {
+    colour: '#63527D',
+    symbol: '◈',
+    passiveName: { en: 'Honour', es: 'Honor' },
+    passiveText: {
+      en: 'Once per match, when a unit is defeated, the attacker discards a random card.',
+      es: 'Una vez por partida, cuando una unidad es derrotada, el atacante descarta una carta al azar.',
+    },
+  },
 };

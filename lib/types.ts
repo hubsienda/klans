@@ -1,14 +1,26 @@
 export type Faction = 'ROMAN' | 'VIKING' | 'EGYPT' | 'SAMURAI';
-export type CardType = 'UNIT' | 'ATTACK' | 'DEFENCE' | 'DOCTOR' | 'SPY' | 'SABOTAGE' | 'SACK' | 'SPECIAL';
+
+export type CardType =
+  | 'ATTACK'
+  | 'DEFENCE'
+  | 'DOCTOR'
+  | 'SPY'
+  | 'SACK'
+  | 'SABOTAGE'
+  | 'AMBUSH';
+
 export type UnitState = 'ALIVE' | 'DEFEATED';
 export type PlayerId = 'HUMAN' | 'COMPUTER';
 export type Difficulty = 'SIMPLE' | 'SKILLED';
 export type Language = 'es' | 'en';
 export type Theme = 'light' | 'dark';
 export type Screen = 'HOME' | 'SETUP' | 'GAME' | 'END';
-export type GamePhase = 'DRAW' | 'ACTION' | 'REACTION' | 'ENDED';
+export type GamePhase = 'ACTION' | 'AWAIT_DEFENCE' | 'AWAIT_PASSIVE' | 'GAME_OVER';
 
-export interface LocalisedText { es: string; en: string }
+export interface LocalisedText {
+  en: string;
+  es: string;
+}
 
 export interface CardDefinition {
   id: string;
@@ -16,64 +28,53 @@ export interface CardDefinition {
   type: CardType;
   name: string;
   quantity: number;
-  offensive: boolean;
-  special: boolean;
-  immediateOnNormalDraw: boolean;
   symbol: string;
   labels: LocalisedText;
   shortText: LocalisedText;
 }
 
-export interface CardInstance extends CardDefinition { instanceId: string }
-
-export interface UnitCard {
-  id: string;
-  name: string;
+export interface CardInstance {
+  instanceId: string;
+  definitionId: string;
   faction: Faction;
+  type: CardType;
+  name: string;
+  symbol: string;
+}
+
+export interface Unit {
+  id: string;
+  faction: Faction;
+  name: string;
   state: UnitState;
-  defence?: CardInstance;
-  protectedByTestudo?: boolean;
-  isMummy?: boolean;
 }
 
 export interface PlayerState {
-  id: PlayerId;
   faction: Faction;
   hand: CardInstance[];
-  units: UnitCard[];
-  skipTurns: number;
-  defenceDisabled: boolean;
-  defenceDisabledTurns: number;
-  bushidoActive: boolean;
-  testudoActive: boolean;
-  mummyDoubleAttack: boolean;
-  survivalUsed: boolean;
-  knowsOpponentHand: boolean;
+  units: Unit[];
+  skipNextTurn: boolean;
+  passiveUsed: boolean;
 }
 
-export interface LogEntry { id: string; text: LocalisedText }
+export interface GameLogEntry extends LocalisedText {
+  id: string;
+}
 
-export interface AttackContext {
+export interface PendingAttack {
   attacker: PlayerId;
   defender: PlayerId;
   targetUnitId: string;
-  attackCard?: CardInstance;
-  source: string;
-  allowHandDefence: boolean;
-  doubleHit?: boolean;
-  valhallaEligible?: boolean;
+  source: 'ATTACK' | 'AMBUSH';
 }
 
-export type PendingAction =
-  | { kind: 'ATTACK_TARGET'; cardId: string }
-  | { kind: 'DEFENCE_TARGET'; cardId: string }
-  | { kind: 'DOCTOR_TARGET'; cardId: string }
-  | { kind: 'TESTUDO_TARGETS'; cardId: string; selected: string[] }
-  | { kind: 'BERSERKER_TARGET'; cardId: string; remaining: number }
-  | { kind: 'SACK_CHOICE'; cardId: string }
-  | { kind: 'SEPPUKU_CHOICE'; cardId: string; ownerEffect: boolean }
-  | { kind: 'VALHALLA_FOREIGN'; cardId: string }
-  | { kind: 'REACTION'; context: AttackContext };
+export type PassiveKind = 'ROMAN_DISCIPLINE' | 'VIKING_FURY' | 'EGYPT_RESTORATION';
+
+export interface PendingPassive {
+  player: PlayerId;
+  kind: PassiveKind;
+  attack?: PendingAttack;
+}
 
 export interface GameState {
   human: PlayerState;
@@ -83,15 +84,25 @@ export interface GameState {
   phase: GamePhase;
   deck: CardInstance[];
   discardPile: CardInstance[];
-  cardsPlayedThisTurn: number;
-  offensivePlayedThisTurn: boolean;
-  specialPlayedThisTurn: boolean;
-  attackLimitThisTurn: number;
-  attacksMadeThisTurn: number;
-  pendingAction?: PendingAction;
-  log: LogEntry[];
-  winner?: PlayerId;
+  actionsUsedThisTurn: number;
+  pendingAttack?: PendingAttack;
+  pendingPassive?: PendingPassive;
+  revealComputerHand: boolean;
+  computerKnowsHumanHand: boolean;
   difficulty: Difficulty;
-  language: Language;
-  aiThinking: boolean;
+  log: GameLogEntry[];
+  winner?: PlayerId;
+  lastAction?: LocalisedText;
+}
+
+export interface StartGameOptions {
+  humanFaction: Faction;
+  computerFaction: Faction;
+  difficulty: Difficulty;
+}
+
+export interface ActionResult {
+  state: GameState;
+  ok: boolean;
+  message?: LocalisedText;
 }

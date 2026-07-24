@@ -1,6 +1,6 @@
 {
   "name": "klans-solo-playtest",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -28,6 +28,6 @@
     "postcss": "8.5.16"
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=22.0.0"
   }
 }
