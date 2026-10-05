@@ -2,15 +2,21 @@
 
 KLANS is the website and browser adaptation for the KLANS tabletop card game.
 
+## Copyright
+
+Naralimon s.c. is the copyright owner of KLANS. KLANS, its rules, game system, names, artwork and associated game materials are protected by copyright. All rights reserved.
+
 ## Website
 
-The App Router site contains five core routes:
+The App Router site contains seven routes:
 
 - `/` — KLANS homepage
 - `/play` — Human-vs-Computer online adaptation
 - `/rules` — complete tabletop rules
 - `/factions` — ROMAN, VIKING, EGYPT and SAMURAI, with all twenty supplied unit images
 - `/action-cards` — the seven official action-card types using the supplied artwork
+- `/privacy` — bilingual privacy information
+- `/cookies` — bilingual cookie/browser-storage information
 
 The entire site supports English/Spanish and light/dark themes.
 
