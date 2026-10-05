@@ -36,6 +36,10 @@ export function PrivacyContent() {
           title: '7. Your privacy rights',
           body: 'Depending on the law that applies to you, you may have rights concerning personal data, such as access, correction, deletion, restriction, objection, portability or the right to complain to a competent supervisory authority. These rights apply where the relevant legal conditions are met.',
         },
+        {
+          title: '8. Copyright ownership',
+          body: 'Naralimon s.c. is the copyright owner of KLANS. KLANS, its rules, game system, names, artwork and associated game materials are protected by copyright and are not presented as public-domain material or as content available for unrestricted reuse.',
+        },
       ]
     : [
         {
@@ -65,6 +69,10 @@ export function PrivacyContent() {
         {
           title: '7. Tus derechos de privacidad',
           body: 'Dependiendo de la legislación que te resulte aplicable, puedes tener derechos sobre tus datos personales, como acceso, rectificación, supresión, limitación, oposición, portabilidad o el derecho a reclamar ante una autoridad de control competente. Estos derechos se aplican cuando se cumplen las condiciones legales correspondientes.',
+        },
+        {
+          title: '8. Titularidad de los derechos de autor',
+          body: 'Naralimon s.c. es el titular de los derechos de autor de KLANS. KLANS, sus reglas, sistema de juego, nombres, ilustraciones y materiales asociados están protegidos por derechos de autor y no se presentan como material de dominio público ni como contenido disponible para reutilización sin restricciones.',
         },
       ];
 
@@ -97,7 +105,7 @@ export function PrivacyContent() {
           </section>
         ))}
         <section className="rule-section">
-          <h2 className="text-lg font-semibold">{language === 'en' ? '8. Privacy contact' : '8. Contacto de privacidad'}</h2>
+          <h2 className="text-lg font-semibold">{language === 'en' ? '9. Privacy contact' : '9. Contacto de privacidad'}</h2>
           <p className="mt-3 text-sm leading-7 text-[var(--muted)]">{contactText}</p>
         </section>
       </div>
