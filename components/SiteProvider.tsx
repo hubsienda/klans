@@ -47,6 +47,7 @@ export function SiteProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(() => ({ language, setLanguage, theme, setTheme }), [language, theme]);
   const nav = [
+    { href: '/', label: t(language, 'home') },
     { href: '/play', label: t(language, 'play') },
     { href: '/rules', label: t(language, 'rules') },
     { href: '/factions', label: t(language, 'factions') },
