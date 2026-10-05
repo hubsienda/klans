@@ -14,8 +14,7 @@ export type PlayerId = 'HUMAN' | 'COMPUTER';
 export type Difficulty = 'SIMPLE' | 'SKILLED';
 export type Language = 'es' | 'en';
 export type Theme = 'light' | 'dark';
-export type Screen = 'HOME' | 'SETUP' | 'GAME' | 'END';
-export type GamePhase = 'ACTION' | 'AWAIT_DEFENCE' | 'AWAIT_PASSIVE' | 'GAME_OVER';
+export type GamePhase = 'READY' | 'ACTION' | 'AWAIT_DEFENCE' | 'GAME_OVER';
 
 export interface LocalisedText {
   en: string;
@@ -23,10 +22,7 @@ export interface LocalisedText {
 }
 
 export interface CardDefinition {
-  id: string;
-  faction: Faction;
   type: CardType;
-  name: string;
   quantity: number;
   symbol: string;
   labels: LocalisedText;
@@ -35,10 +31,8 @@ export interface CardDefinition {
 
 export interface CardInstance {
   instanceId: string;
-  definitionId: string;
   faction: Faction;
   type: CardType;
-  name: string;
   symbol: string;
 }
 
@@ -54,45 +48,37 @@ export interface PlayerState {
   hand: CardInstance[];
   units: Unit[];
   skipNextTurn: boolean;
-  passiveUsed: boolean;
-}
-
-export interface GameLogEntry extends LocalisedText {
-  id: string;
 }
 
 export interface PendingAttack {
   attacker: PlayerId;
   defender: PlayerId;
   targetUnitId: string;
-  source: 'ATTACK' | 'AMBUSH';
+  source: 'ATTACK';
 }
 
-export type PassiveKind = 'ROMAN_DISCIPLINE' | 'VIKING_FURY' | 'EGYPT_RESTORATION';
-
-export interface PendingPassive {
-  player: PlayerId;
-  kind: PassiveKind;
-  attack?: PendingAttack;
+export interface GameLogEntry extends LocalisedText {
+  id: string;
 }
 
 export interface GameState {
   human: PlayerState;
   computer: PlayerState;
   currentPlayer: PlayerId;
+  startingPlayer: PlayerId;
   turnNumber: number;
   phase: GamePhase;
   deck: CardInstance[];
   discardPile: CardInstance[];
-  actionsUsedThisTurn: number;
   pendingAttack?: PendingAttack;
-  pendingPassive?: PendingPassive;
   revealComputerHand: boolean;
-  computerKnowsHumanHand: boolean;
+  revealReason?: 'SPY' | 'ENEMY_SPY_DISCARD';
+  computerKnownHumanHand: CardInstance[] | null;
   difficulty: Difficulty;
   log: GameLogEntry[];
-  winner?: PlayerId;
   lastAction?: LocalisedText;
+  winner?: PlayerId;
+  conqueredFaction?: Faction;
 }
 
 export interface StartGameOptions {

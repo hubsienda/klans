@@ -1,18 +1,20 @@
 let sequence = 0;
 
-export const uid = (prefix = 'id'): string => {
+export const uid = (prefix: string): string => {
   sequence += 1;
   return `${prefix}-${Date.now().toString(36)}-${sequence.toString(36)}`;
 };
 
-export const shuffle = <T,>(items: readonly T[]): T[] => {
+export const shuffle = <T>(items: T[], rng: () => number = Math.random): T[] => {
   const copy = [...items];
-  for (let index = copy.length - 1; index > 0; index -= 1) {
-    const target = Math.floor(Math.random() * (index + 1));
-    [copy[index], copy[target]] = [copy[target], copy[index]];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(rng() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
   }
   return copy;
 };
 
-export const randomItem = <T,>(items: readonly T[]): T | undefined =>
-  items.length > 0 ? items[Math.floor(Math.random() * items.length)] : undefined;
+export const randomItem = <T>(items: T[], rng: () => number = Math.random): T | undefined => {
+  if (items.length === 0) return undefined;
+  return items[Math.floor(rng() * items.length)];
+};
