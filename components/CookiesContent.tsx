@@ -34,6 +34,10 @@ export function CookiesContent() {
           title: '6. Changing your choice',
           body: 'You can reopen the consent preferences at any time through Cookie Settings in the global footer. You can also clear KLANS site data using your browser settings. If the stored consent preference is removed, the consent banner will appear again on your next visit.',
         },
+        {
+          title: '7. KLANS ownership',
+          body: 'Naralimon s.c. is the copyright owner of KLANS. This cookie policy does not grant any licence or permission to reuse KLANS rules, game-system materials, names, artwork or associated game content.',
+        },
       ]
     : [
         {
@@ -60,6 +64,10 @@ export function CookiesContent() {
           title: '6. Cómo cambiar tu elección',
           body: 'Puedes volver a abrir las preferencias de consentimiento en cualquier momento mediante Configurar cookies en el pie de página global. También puedes borrar los datos de KLANS desde la configuración de tu navegador. Si se elimina la preferencia de consentimiento guardada, el aviso volverá a aparecer en tu siguiente visita.',
         },
+        {
+          title: '7. Titularidad de KLANS',
+          body: 'Naralimon s.c. es el titular de los derechos de autor de KLANS. Esta política de cookies no concede ninguna licencia ni permiso para reutilizar las reglas de KLANS, los materiales del sistema de juego, nombres, ilustraciones o contenidos asociados.',
+        },
       ];
 
   return (
@@ -83,7 +91,7 @@ export function CookiesContent() {
           </section>
         ))}
         <section className="rule-section">
-          <h2 className="text-lg font-semibold">{language === 'en' ? '7. Cookie settings' : '7. Configurar cookies'}</h2>
+          <h2 className="text-lg font-semibold">{language === 'en' ? '8. Cookie settings' : '8. Configurar cookies'}</h2>
           <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
             {language === 'en'
               ? `Your consent record is stored locally under ${CONSENT_STORAGE_KEY}. You do not need to clear browser storage manually to change it.`
