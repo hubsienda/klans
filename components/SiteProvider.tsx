@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { Language, Theme } from '@/lib/types';
 import { t } from '@/lib/i18n';
+import { ConsentProvider } from './ConsentProvider';
+import { SiteFooter } from './SiteFooter';
 
 interface SiteContextValue {
   language: Language;
@@ -53,56 +55,53 @@ export function SiteProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <SiteContext.Provider value={value}>
-      <div className="min-h-screen bg-[var(--page)] text-[var(--ink)]">
-        <header className="sticky top-0 z-50 border-b border-[var(--line)] bg-[var(--page-alpha)] backdrop-blur-xl">
-          <div className="site-container flex min-h-[68px] items-center justify-between gap-4">
-            <Link href="/" className="flex items-center" aria-label="KLANS home" onClick={() => setMenuOpen(false)}>
-              <Image src="/logo.png" alt="KLANS" width={160} height={54} className="h-9 w-auto object-contain" priority />
-            </Link>
-            <nav className="hidden items-center gap-7 lg:flex" aria-label="Primary navigation">
-              {nav.map((item) => (
-                <Link key={item.href} href={item.href} className="nav-link">{item.label}</Link>
-              ))}
-            </nav>
-            <div className="flex items-center gap-2">
-              <div className="segmented" aria-label="Language">
-                <button className={language === 'es' ? 'active' : ''} onClick={() => setLanguage('es')}>ES</button>
-                <button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>EN</button>
+      <ConsentProvider language={language}>
+        <div className="flex min-h-screen flex-col bg-[var(--page)] text-[var(--ink)]">
+          <header className="sticky top-0 z-50 border-b border-[var(--line)] bg-[var(--page-alpha)] backdrop-blur-xl">
+            <div className="site-container flex min-h-[68px] items-center justify-between gap-4">
+              <Link href="/" className="flex items-center" aria-label="KLANS home" onClick={() => setMenuOpen(false)}>
+                <Image src="/logo.png" alt="KLANS" width={160} height={54} className="h-9 w-auto object-contain" priority />
+              </Link>
+              <nav className="hidden items-center gap-7 lg:flex" aria-label="Primary navigation">
+                {nav.map((item) => (
+                  <Link key={item.href} href={item.href} className="nav-link">{item.label}</Link>
+                ))}
+              </nav>
+              <div className="flex items-center gap-2">
+                <div className="segmented" aria-label="Language">
+                  <button className={language === 'es' ? 'active' : ''} onClick={() => setLanguage('es')}>ES</button>
+                  <button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>EN</button>
+                </div>
+                <button
+                  className="icon-button"
+                  onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                  aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+                  title={theme === 'light' ? 'Dark mode' : 'Light mode'}
+                >
+                  {theme === 'light' ? '☀' : '☾'}
+                </button>
+                <button
+                  className="icon-button lg:hidden"
+                  onClick={() => setMenuOpen((open) => !open)}
+                  aria-expanded={menuOpen}
+                  aria-label="Menu"
+                >
+                  {menuOpen ? '×' : '☰'}
+                </button>
               </div>
-              <button
-                className="icon-button"
-                onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-                title={theme === 'light' ? 'Dark mode' : 'Light mode'}
-              >
-                {theme === 'light' ? '☀' : '☾'}
-              </button>
-              <button
-                className="icon-button lg:hidden"
-                onClick={() => setMenuOpen((open) => !open)}
-                aria-expanded={menuOpen}
-                aria-label="Menu"
-              >
-                {menuOpen ? '×' : '☰'}
-              </button>
             </div>
-          </div>
-          {menuOpen && (
-            <nav className="site-container grid gap-1 border-t border-[var(--line)] py-3 lg:hidden" aria-label="Mobile navigation">
-              {nav.map((item) => (
-                <Link key={item.href} href={item.href} className="mobile-nav-link" onClick={() => setMenuOpen(false)}>{item.label}</Link>
-              ))}
-            </nav>
-          )}
-        </header>
-        {children}
-        <footer className="border-t border-[var(--line)] py-8">
-          <div className="site-container flex flex-col gap-3 text-xs text-[var(--muted)] sm:flex-row sm:items-center sm:justify-between">
-            <span>KLANS</span>
-            <span>{language === 'en' ? 'Tabletop strategy and browser play.' : 'Estrategia de mesa y juego en navegador.'}</span>
-          </div>
-        </footer>
-      </div>
+            {menuOpen && (
+              <nav className="site-container grid gap-1 border-t border-[var(--line)] py-3 lg:hidden" aria-label="Mobile navigation">
+                {nav.map((item) => (
+                  <Link key={item.href} href={item.href} className="mobile-nav-link" onClick={() => setMenuOpen(false)}>{item.label}</Link>
+                ))}
+              </nav>
+            )}
+          </header>
+          <div className="flex-1">{children}</div>
+          <SiteFooter language={language} />
+        </div>
+      </ConsentProvider>
     </SiteContext.Provider>
   );
 }

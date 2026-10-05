@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -29,17 +28,17 @@
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; background: var(--page); }
-body { margin: 0; background: var(--page); color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif; }
 a { color: inherit; text-decoration: none; }
 button, select { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
-button:focus-visible, a:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 button:disabled { cursor: not-allowed; opacity: .42; }
 
 .site-container { width: min(100% - 28px, 1380px); margin-inline: auto; }
 .site-section { padding-block: clamp(3rem, 7vw, 6.5rem); }
 .hero-section { background: radial-gradient(circle at 85% 20%, color-mix(in srgb, var(--accent) 15%, transparent), transparent 34%); }
-.font-cinzel { font-family: Cinzel, Georgia, serif; }
+.font-cinzel { font-family: var(--font-cinzel), Georgia, serif; }
 
 @layer components {
   .eyebrow { @apply text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]; }
@@ -78,7 +77,7 @@ button:disabled { cursor: not-allowed; opacity: .42; }
 .rules-toc a { padding: 8px 10px; border-left: 2px solid var(--line); font-size: 12px; color: var(--muted); }
 .rules-toc a:hover { border-left-color: var(--accent); color: var(--ink); }
 .rule-section { padding: clamp(1.2rem, 3vw, 2rem); border: 1px solid var(--line); border-radius: 18px; background: var(--panel); }
-.rule-number { display: grid; flex: 0 0 42px; height: 42px; place-items: center; border: 1px solid var(--line); border-radius: 50%; font-family: Cinzel, Georgia, serif; font-size: 12px; color: var(--muted); }
+.rule-number { display: grid; flex: 0 0 42px; height: 42px; place-items: center; border: 1px solid var(--line); border-radius: 50%; font-family: var(--font-cinzel), Georgia, serif; font-size: 12px; color: var(--muted); }
 
 .faction-choice { display: flex; align-items: center; gap: 14px; min-height: 90px; padding: 18px; text-align: left; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); transition: .2s ease; }
 .faction-choice:hover,.faction-choice.selected { border-color: var(--faction); transform: translateY(-2px); box-shadow: 0 12px 35px rgba(20,20,18,.06); }
@@ -93,14 +92,14 @@ button:disabled { cursor: not-allowed; opacity: .42; }
 .unit-grid { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; padding-top: 12px; }
 .unit-card { position: relative; display: flex; min-width: 0; min-height: 132px; flex-direction: column; align-items: center; border: 1px solid var(--line); border-radius: 14px; background: var(--page); padding: 12px 6px 9px; transition: .18s ease; }
 .unit-card .unit-symbol { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 50%; background: var(--panel); font-size: 20px; }
-.unit-card strong { margin-top: 10px; max-width: 100%; overflow-wrap: anywhere; font-family: Cinzel,Georgia,serif; font-size: 10px; letter-spacing: .02em; }
+.unit-card strong { margin-top: 10px; max-width: 100%; overflow-wrap: anywhere; font-family: var(--font-cinzel), Georgia, serif; font-size: 10px; letter-spacing: .02em; }
 .unit-card small { margin-top: 3px; font-size: 9px; color: var(--muted); }
 .unit-card.targetable { border-color: var(--accent); cursor: pointer; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent); }
 .unit-card.targetable:hover { transform: translateY(-3px); }
 .unit-card.defeated { opacity: .43; filter: grayscale(1); transform: rotate(-2deg); }
 .table-centre { display: flex; min-height: 88px; align-items: center; justify-content: center; gap: 24px; border: 1px dashed var(--line); border-radius: 18px; background: color-mix(in srgb, var(--panel) 75%, transparent); }
 .deck-stack { display: grid; width: 68px; height: 82px; place-items: center; border: 2px solid #cfa24a; border-radius: 9px; background: linear-gradient(145deg,#27251f,#131310); color: #cfa24a; box-shadow: 5px 5px 0 color-mix(in srgb, var(--accent) 20%, var(--panel)); }
-.deck-stack span { font-family: Cinzel,Georgia,serif; font-size: 9px; font-weight: 700; letter-spacing: .08em; }
+.deck-stack span { font-family: var(--font-cinzel), Georgia, serif; font-size: 9px; font-weight: 700; letter-spacing: .08em; }
 .deck-stack strong { font-size: 17px; }
 .hand-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(170px,1fr)); gap: 10px; align-items: stretch; }
 .hand-card { min-width: 0; min-height: 252px; border: 1px solid var(--line); border-top: 4px solid var(--faction); border-radius: 16px; background: var(--panel); padding: 13px; box-shadow: 0 8px 20px rgba(20,20,18,.05); transition: .18s ease; }
