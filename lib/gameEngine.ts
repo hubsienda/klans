@@ -1,13 +1,12 @@
 import { createMatchDeck, createUnits } from './cards';
-import {
+import type {
   ActionResult,
   CardInstance,
-  CardType,
   Difficulty,
+  Faction,
   GameLogEntry,
   GameState,
   LocalisedText,
-  PendingAttack,
   PlayerId,
   PlayerState,
   StartGameOptions,
@@ -17,35 +16,26 @@ import { randomItem, shuffle, uid } from './utils';
 
 const clone = (game: GameState): GameState => structuredClone(game);
 export const opponentOf = (player: PlayerId): PlayerId => (player === 'HUMAN' ? 'COMPUTER' : 'HUMAN');
-export const playerKey = (player: PlayerId): 'human' | 'computer' => (player === 'HUMAN' ? 'human' : 'computer');
+const playerKey = (player: PlayerId): 'human' | 'computer' => (player === 'HUMAN' ? 'human' : 'computer');
 export const getPlayer = (game: GameState, player: PlayerId): PlayerState => game[playerKey(player)];
 
-const actorText = (player: PlayerId): LocalisedText =>
-  player === 'HUMAN'
-    ? { en: 'You', es: 'Tú' }
-    : { en: 'Computer', es: 'El ordenador' };
-
-const possessiveText = (player: PlayerId): LocalisedText =>
-  player === 'HUMAN'
-    ? { en: 'your', es: 'tu' }
-    : { en: "computer's", es: 'del ordenador' };
+const actorName = (player: PlayerId, language: 'en' | 'es'): string => {
+  if (language === 'en') return player === 'HUMAN' ? 'You' : 'Computer';
+  return player === 'HUMAN' ? 'Tú' : 'El ordenador';
+};
 
 const addLog = (game: GameState, text: LocalisedText): void => {
   const entry: GameLogEntry = { id: uid('log'), ...text };
   game.log.unshift(entry);
   game.lastAction = text;
-  if (game.log.length > 120) game.log.length = 120;
+  if (game.log.length > 150) game.log.length = 150;
 };
 
 const result = (state: GameState, ok: boolean, message?: LocalisedText): ActionResult => ({ state, ok, message });
-
-const fail = (game: GameState, en: string, es: string): ActionResult =>
-  result(game, false, { en, es });
-
-const aliveUnits = (player: PlayerState): Unit[] => player.units.filter((unit) => unit.state === 'ALIVE');
+const fail = (state: GameState, en: string, es: string): ActionResult => result(state, false, { en, es });
+const livingUnits = (player: PlayerState): Unit[] => player.units.filter((unit) => unit.state === 'ALIVE');
 const defeatedUnits = (player: PlayerState): Unit[] => player.units.filter((unit) => unit.state === 'DEFEATED');
-
-export const livingUnitCount = (game: GameState, player: PlayerId): number => aliveUnits(getPlayer(game, player)).length;
+export const livingUnitCount = (game: GameState, player: PlayerId): number => livingUnits(getPlayer(game, player)).length;
 
 const removeCard = (hand: CardInstance[], instanceId: string): CardInstance | undefined => {
   const index = hand.findIndex((card) => card.instanceId === instanceId);
@@ -53,135 +43,128 @@ const removeCard = (hand: CardInstance[], instanceId: string): CardInstance | un
   return hand.splice(index, 1)[0];
 };
 
-const discardCardInstance = (game: GameState, card: CardInstance): void => {
-  game.discardPile.push(card);
+const snapshotHumanHand = (game: GameState): void => {
+  game.computerKnownHumanHand = structuredClone(game.human.hand);
 };
 
-const refillDeck = (game: GameState): void => {
-  if (game.deck.length > 0 || game.discardPile.length === 0) return;
-  game.deck = shuffle(game.discardPile);
-  game.discardPile = [];
-  addLog(game, {
-    en: 'The discard pile was shuffled into a new common deck.',
-    es: 'La pila de descarte se barajó para formar un nuevo mazo común.',
-  });
+const clearComputerKnowledgeIfHumanHandChanged = (game: GameState): void => {
+  game.computerKnownHumanHand = null;
 };
 
-export const drawCard = (gameInput: GameState, player: PlayerId, logDraw = true): GameState => {
-  const game = clone(gameInput);
-  refillDeck(game);
+const drawOneMutable = (game: GameState, player: PlayerId, logDraw = true): CardInstance | undefined => {
+  if (game.deck.length === 0 && game.discardPile.length > 0) {
+    game.deck = shuffle(game.discardPile);
+    game.discardPile = [];
+    addLog(game, {
+      en: 'The discard pile was shuffled to continue the common deck.',
+      es: 'La pila de descarte se barajó para continuar la baraja común.',
+    });
+  }
   const card = game.deck.pop();
   if (!card) {
-    addLog(game, {
-      en: 'No card could be drawn because both deck and discard pile are empty.',
-      es: 'No se pudo robar ninguna carta porque el mazo y el descarte están vacíos.',
-    });
-    return game;
+    if (logDraw) {
+      addLog(game, {
+        en: `${actorName(player, 'en')} could not draw because no action cards are available.`,
+        es: `${actorName(player, 'es')} no pudo robar porque no hay cartas de acción disponibles.`,
+      });
+    }
+    return undefined;
   }
   getPlayer(game, player).hand.push(card);
+  if (player === 'HUMAN') clearComputerKnowledgeIfHumanHandChanged(game);
   if (logDraw) {
-    const actor = actorText(player);
     addLog(game, {
-      en: `${actor.en} drew ${card.type}.`,
-      es: player === 'HUMAN' ? `Has robado ${card.type}.` : `El ordenador robó ${card.type}.`,
+      en: player === 'HUMAN' ? `You drew ${card.type}.` : 'Computer drew one card.',
+      es: player === 'HUMAN' ? `Has robado ${card.type}.` : 'El ordenador robó una carta.',
     });
   }
+  return card;
+};
+
+export const drawCard = (gameInput: GameState, player: PlayerId): GameState => {
+  const game = clone(gameInput);
+  drawOneMutable(game, player, true);
   return game;
 };
 
-const drawOpeningHand = (gameInput: GameState, player: PlayerId, count: number): GameState => {
-  let game = gameInput;
-  for (let index = 0; index < count; index += 1) game = drawCard(game, player, false);
+const drawOpeningHandMutable = (game: GameState, player: PlayerId): void => {
+  for (let index = 0; index < 5; index += 1) drawOneMutable(game, player, false);
+};
+
+export const startGame = (
+  options: StartGameOptions,
+  rng: () => number = Math.random,
+): GameState => {
+  if (options.humanFaction === options.computerFaction) throw new Error('Human and computer factions must be different.');
+  const startingPlayer: PlayerId = rng() < 0.5 ? 'HUMAN' : 'COMPUTER';
+  const game: GameState = {
+    human: { faction: options.humanFaction, hand: [], units: createUnits(options.humanFaction), skipNextTurn: false },
+    computer: { faction: options.computerFaction, hand: [], units: createUnits(options.computerFaction), skipNextTurn: false },
+    currentPlayer: startingPlayer,
+    startingPlayer,
+    turnNumber: 0,
+    phase: 'READY',
+    deck: createMatchDeck(options.humanFaction, options.computerFaction, rng),
+    discardPile: [],
+    revealComputerHand: false,
+    computerKnownHumanHand: null,
+    difficulty: options.difficulty,
+    log: [],
+  };
+  drawOpeningHandMutable(game, 'HUMAN');
+  drawOpeningHandMutable(game, 'COMPUTER');
+  addLog(game, {
+    en: `${options.humanFaction} faces ${options.computerFaction}. ${actorName(startingPlayer, 'en')} will start.`,
+    es: `${options.humanFaction} se enfrenta a ${options.computerFaction}. ${actorName(startingPlayer, 'es')} comenzará.`,
+  });
   return game;
 };
 
-const startTurn = (gameInput: GameState, requestedPlayer: PlayerId): GameState => {
-  let game = clone(gameInput);
+export const beginTurn = (gameInput: GameState, requestedPlayer: PlayerId = gameInput.currentPlayer): GameState => {
+  const game = clone(gameInput);
   let player = requestedPlayer;
 
   for (let guard = 0; guard < 4; guard += 1) {
-    const state = getPlayer(game, player);
+    if (game.winner) return game;
     game.currentPlayer = player;
-    game.actionsUsedThisTurn = 0;
-    game.phase = 'ACTION';
     game.pendingAttack = undefined;
-    game.pendingPassive = undefined;
+    game.phase = 'ACTION';
     game.turnNumber += 1;
 
+    const state = getPlayer(game, player);
     if (state.skipNextTurn) {
       state.skipNextTurn = false;
-      const actor = actorText(player);
       addLog(game, {
-        en: `${actor.en} skipped the turn because of SABOTAGE.`,
+        en: player === 'HUMAN'
+          ? 'You completely lost this turn because of SABOTAGE. No card was drawn.'
+          : 'Computer completely lost this turn because of SABOTAGE. No card was drawn.',
         es: player === 'HUMAN'
-          ? 'Has perdido el turno por SABOTAGE.'
-          : 'El ordenador perdió el turno por SABOTAGE.',
+          ? 'Has perdido completamente este turno por SABOTAJE. No has robado ninguna carta.'
+          : 'El ordenador perdió completamente este turno por SABOTAJE. No robó ninguna carta.',
       });
       player = opponentOf(player);
       continue;
     }
 
-    game = drawCard(game, player, true);
-    const actor = actorText(player);
+    drawOneMutable(game, player, true);
     addLog(game, {
-      en: `${actor.en} began turn ${game.turnNumber}.`,
-      es: player === 'HUMAN'
-        ? `Has comenzado el turno ${game.turnNumber}.`
-        : `El ordenador comenzó el turno ${game.turnNumber}.`,
+      en: player === 'HUMAN' ? `Your turn ${game.turnNumber} began.` : `Computer turn ${game.turnNumber} began.`,
+      es: player === 'HUMAN' ? `Ha comenzado tu turno ${game.turnNumber}.` : `Ha comenzado el turno ${game.turnNumber} del ordenador.`,
     });
     return game;
   }
-
   return game;
 };
 
-export const startGame = (options: StartGameOptions): GameState => {
-  if (options.humanFaction === options.computerFaction) {
-    throw new Error('Human and computer factions must be different.');
-  }
-
-  let game: GameState = {
-    human: {
-      faction: options.humanFaction,
-      hand: [],
-      units: createUnits(options.humanFaction),
-      skipNextTurn: false,
-      passiveUsed: false,
-    },
-    computer: {
-      faction: options.computerFaction,
-      hand: [],
-      units: createUnits(options.computerFaction),
-      skipNextTurn: false,
-      passiveUsed: false,
-    },
-    currentPlayer: 'HUMAN',
-    turnNumber: 0,
-    phase: 'ACTION',
-    deck: createMatchDeck(options.humanFaction, options.computerFaction),
-    discardPile: [],
-    actionsUsedThisTurn: 0,
-    revealComputerHand: false,
-    computerKnowsHumanHand: false,
-    difficulty: options.difficulty,
-    log: [],
-  };
-
-  game = drawOpeningHand(game, 'HUMAN', 5);
-  game = drawOpeningHand(game, 'COMPUTER', 5);
-  addLog(game, {
-    en: `${options.humanFaction} faces ${options.computerFaction}. Each side begins with five units and five cards.`,
-    es: `${options.humanFaction} se enfrenta a ${options.computerFaction}. Cada bando comienza con cinco unidades y cinco cartas.`,
-  });
-  return startTurn(game, 'HUMAN');
-};
-
 export const canAct = (game: GameState, player: PlayerId): boolean =>
-  !game.winner && game.phase === 'ACTION' && game.currentPlayer === player && game.actionsUsedThisTurn < 2;
+  !game.winner && game.phase === 'ACTION' && game.currentPlayer === player;
+
+export const canEndTurn = (game: GameState, player: PlayerId): boolean =>
+  canAct(game, player) && getPlayer(game, player).hand.length <= 5;
 
 export const validTargetsForCard = (game: GameState, player: PlayerId, card: CardInstance): Unit[] => {
-  if (card.type === 'ATTACK' || card.type === 'AMBUSH') return aliveUnits(getPlayer(game, opponentOf(player)));
-  if (card.type === 'DOCTOR' && card.faction === getPlayer(game, player).faction) return defeatedUnits(getPlayer(game, player));
+  if (card.type === 'ATTACK' || card.type === 'AMBUSH') return livingUnits(getPlayer(game, opponentOf(player)));
+  if (card.type === 'DOCTOR') return defeatedUnits(getPlayer(game, player));
   return [];
 };
 
@@ -189,140 +172,61 @@ export const canPlayCard = (game: GameState, player: PlayerId, card: CardInstanc
   if (!canAct(game, player)) return false;
   if (!getPlayer(game, player).hand.some((item) => item.instanceId === card.instanceId)) return false;
   if (card.type === 'DEFENCE') return false;
-  if (card.type === 'DOCTOR') return validTargetsForCard(game, player, card).length > 0;
-  if (card.type === 'ATTACK' || card.type === 'AMBUSH') return validTargetsForCard(game, player, card).length > 0;
+  if (card.type === 'ATTACK' || card.type === 'AMBUSH' || card.type === 'DOCTOR') {
+    return validTargetsForCard(game, player, card).length > 0;
+  }
+  if (card.type === 'SACK') return getPlayer(game, opponentOf(player)).hand.length > 0;
   return true;
 };
 
-const checkVictoryMutable = (game: GameState): void => {
-  const humanAlive = aliveUnits(game.human).length;
-  const computerAlive = aliveUnits(game.computer).length;
-  if (humanAlive > 0 && computerAlive > 0) return;
-
-  game.winner = humanAlive > 0 ? 'HUMAN' : 'COMPUTER';
+const finishVictoryMutable = (game: GameState, winner: PlayerId, conqueredFaction: Faction): void => {
+  game.winner = winner;
+  game.conqueredFaction = conqueredFaction;
   game.phase = 'GAME_OVER';
-  const winner = getPlayer(game, game.winner);
+  game.pendingAttack = undefined;
   addLog(game, {
-    en: `${winner.faction} won the match. In Solo Playtest Edition, conquest equals victory.`,
-    es: `${winner.faction} ganó la partida. En Solo Playtest Edition, la conquista equivale a la victoria.`,
+    en: `${conqueredFaction} was conquered. ${getPlayer(game, winner).faction} wins the solo match.`,
+    es: `${conqueredFaction} fue conquistada. ${getPlayer(game, winner).faction} gana la partida individual.`,
   });
 };
 
-export const checkVictory = (gameInput: GameState): GameState => {
-  const game = clone(gameInput);
-  checkVictoryMutable(game);
-  return game;
-};
-
-const discardRandomFromHand = (game: GameState, player: PlayerId, reason: LocalisedText): CardInstance | undefined => {
-  const state = getPlayer(game, player);
-  const card = randomItem(state.hand);
-  if (!card) return undefined;
-  removeCard(state.hand, card.instanceId);
-  discardCardInstance(game, card);
-  addLog(game, {
-    en: `${actorText(player).en} discarded a random ${card.type} because of ${reason.en}.`,
-    es: player === 'HUMAN'
-      ? `Has descartado al azar ${card.type} por ${reason.es}.`
-      : `El ordenador descartó al azar ${card.type} por ${reason.es}.`,
-  });
-  return card;
-};
-
-const triggerSamuraiHonour = (game: GameState, defeatedPlayer: PlayerId, attacker: PlayerId): void => {
-  const defender = getPlayer(game, defeatedPlayer);
-  if (defender.faction !== 'SAMURAI' || defender.passiveUsed) return;
-  if (getPlayer(game, attacker).hand.length === 0) {
-    addLog(game, {
-      en: 'SAMURAI Honour could not trigger because the attacker had no cards.',
-      es: 'Honor SAMURAI no pudo activarse porque el atacante no tenía cartas.',
-    });
-    return;
-  }
-  defender.passiveUsed = true;
-  discardRandomFromHand(game, attacker, { en: 'SAMURAI Honour', es: 'Honor SAMURAI' });
-  addLog(game, {
-    en: 'SAMURAI Honour was used.',
-    es: 'Se utilizó Honor SAMURAI.',
-  });
-};
-
-const defeatUnitMutable = (game: GameState, attack: PendingAttack): boolean => {
-  const defender = getPlayer(game, attack.defender);
-  const unit = defender.units.find((item) => item.id === attack.targetUnitId && item.state === 'ALIVE');
-  if (!unit) return false;
+const defeatUnitMutable = (game: GameState, defender: PlayerId, attacker: PlayerId, unitId: string, source: 'ATTACK' | 'AMBUSH'): void => {
+  const unit = getPlayer(game, defender).units.find((item) => item.id === unitId && item.state === 'ALIVE');
+  if (!unit) return;
   unit.state = 'DEFEATED';
   addLog(game, {
-    en: `${unit.name} was defeated by ${attack.source}.`,
-    es: `${unit.name} fue derrotado por ${attack.source}.`,
+    en: `${unit.name} was defeated by ${source}.`,
+    es: `${unit.name} fue derrotado por ${source}.`,
   });
-  triggerSamuraiHonour(game, attack.defender, attack.attacker);
-  checkVictoryMutable(game);
-  return true;
-};
-
-const maybeTriggerVikingFury = (game: GameState, attacker: PlayerId, source: 'ATTACK' | 'AMBUSH'): void => {
-  if (game.winner || source !== 'ATTACK') return;
-  const player = getPlayer(game, attacker);
-  if (player.faction !== 'VIKING' || player.passiveUsed) return;
-
-  if (attacker === 'HUMAN') {
-    game.phase = 'AWAIT_PASSIVE';
-    game.pendingPassive = { player: attacker, kind: 'VIKING_FURY' };
-    return;
+  if (livingUnits(getPlayer(game, defender)).length === 0) {
+    finishVictoryMutable(game, attacker, getPlayer(game, defender).faction);
   }
-
-  const shouldUse = player.hand.length < 5 || livingUnitCount(game, 'HUMAN') <= 2;
-  if (!shouldUse) return;
-  player.passiveUsed = true;
-  const drawn = drawCard(game, attacker, false);
-  Object.assign(game, drawn);
-  addLog(game, {
-    en: 'VIKING Fury drew one extra card.',
-    es: 'Furia VIKING robó una carta adicional.',
-  });
 };
 
-const resolveHitMutable = (game: GameState, attack: PendingAttack): void => {
-  const defender = getPlayer(game, attack.defender);
-  if (attack.source === 'ATTACK' && defender.faction === 'ROMAN' && !defender.passiveUsed) {
-    if (attack.defender === 'HUMAN') {
-      game.phase = 'AWAIT_PASSIVE';
-      game.pendingAttack = attack;
-      game.pendingPassive = { player: attack.defender, kind: 'ROMAN_DISCIPLINE', attack };
-      return;
-    }
-    defender.passiveUsed = true;
-    addLog(game, {
-      en: 'ROMAN Discipline ignored the defeat.',
-      es: 'Disciplina ROMAN ignoró la derrota.',
-    });
-    return;
-  }
-
-  const defeated = defeatUnitMutable(game, attack);
-  if (defeated) maybeTriggerVikingFury(game, attack.attacker, attack.source);
-};
-
-const finishAttackAgainstComputer = (game: GameState, attack: PendingAttack): void => {
-  const defender = getPlayer(game, 'COMPUTER');
-  const defence = defender.hand.find((card) => card.type === 'DEFENCE');
-  if (attack.source === 'ATTACK' && defence) {
-    removeCard(defender.hand, defence.instanceId);
-    discardCardInstance(game, defence);
-    addLog(game, {
-      en: 'Computer played DEFENCE. The attack was blocked.',
-      es: 'El ordenador jugó DEFENCE. El ataque fue bloqueado.',
-    });
-    return;
-  }
-  resolveHitMutable(game, attack);
-};
-
-const useCardMutable = (game: GameState, player: PlayerId, card: CardInstance): void => {
+const discardUsedCardMutable = (game: GameState, player: PlayerId, card: CardInstance): void => {
   removeCard(getPlayer(game, player).hand, card.instanceId);
-  discardCardInstance(game, card);
-  game.actionsUsedThisTurn += 1;
+  game.discardPile.push(card);
+  if (player === 'HUMAN') clearComputerKnowledgeIfHumanHandChanged(game);
+};
+
+const computerShouldDefend = (game: GameState, targetUnitId: string): boolean => {
+  const defence = game.computer.hand.some((card) => card.type === 'DEFENCE');
+  if (!defence) return false;
+  if (game.difficulty === 'SIMPLE') return true;
+  const targetIsFinalUnit = livingUnitCount(game, 'COMPUTER') === 1;
+  const target = game.computer.units.find((unit) => unit.id === targetUnitId);
+  return targetIsFinalUnit || Boolean(target);
+};
+
+const transferRandomCardMutable = (game: GameState, from: PlayerId, to: PlayerId): CardInstance | undefined => {
+  const source = getPlayer(game, from);
+  const target = getPlayer(game, to);
+  const chosen = randomItem(source.hand);
+  if (!chosen) return undefined;
+  removeCard(source.hand, chosen.instanceId);
+  target.hand.push(chosen);
+  if (from === 'HUMAN' || to === 'HUMAN') clearComputerKnowledgeIfHumanHandChanged(game);
+  return chosen;
 };
 
 export const playCard = (
@@ -335,357 +239,278 @@ export const playCard = (
   const state = getPlayer(game, player);
   const card = state.hand.find((item) => item.instanceId === cardInstanceId);
   if (!card) return fail(gameInput, 'That card is not in your hand.', 'Esa carta no está en tu mano.');
-  if (!canPlayCard(game, player, card)) {
-    return fail(gameInput, 'That card cannot be played now.', 'Esa carta no se puede jugar ahora.');
-  }
-
-  const actor = actorText(player);
+  if (!canPlayCard(game, player, card)) return fail(gameInput, 'That card cannot be played now.', 'Esa carta no se puede jugar ahora.');
 
   if (card.type === 'ATTACK' || card.type === 'AMBUSH') {
     const target = validTargetsForCard(game, player, card).find((unit) => unit.id === targetUnitId);
     if (!target) return fail(gameInput, 'Select a valid living enemy unit.', 'Selecciona una unidad enemiga viva válida.');
-    useCardMutable(game, player, card);
+    discardUsedCardMutable(game, player, card);
     addLog(game, {
-      en: `${actor.en} played ${card.type} against ${target.name}.`,
-      es: player === 'HUMAN'
-        ? `Has jugado ${card.type} contra ${target.name}.`
-        : `El ordenador jugó ${card.type} contra ${target.name}.`,
+      en: player === 'HUMAN' ? `You played ${card.type} against ${target.name}.` : `Computer played ${card.type} against ${target.name}.`,
+      es: player === 'HUMAN' ? `Has jugado ${card.type} contra ${target.name}.` : `El ordenador jugó ${card.type} contra ${target.name}.`,
     });
-    const attack: PendingAttack = {
-      attacker: player,
-      defender: opponentOf(player),
-      targetUnitId: target.id,
-      source: card.type,
-    };
 
-    if (attack.defender === 'HUMAN' && attack.source === 'ATTACK') {
-      const defenceAvailable = getPlayer(game, 'HUMAN').hand.some((item) => item.type === 'DEFENCE');
-      if (defenceAvailable) {
+    const defender = opponentOf(player);
+    if (card.type === 'AMBUSH') {
+      defeatUnitMutable(game, defender, player, target.id, 'AMBUSH');
+      return result(game, true);
+    }
+
+    if (defender === 'HUMAN') {
+      const humanHasDefence = game.human.hand.some((item) => item.type === 'DEFENCE');
+      if (humanHasDefence) {
+        game.pendingAttack = { attacker: player, defender, targetUnitId: target.id, source: 'ATTACK' };
         game.phase = 'AWAIT_DEFENCE';
-        game.pendingAttack = attack;
+        return result(game, true);
+      }
+      defeatUnitMutable(game, defender, player, target.id, 'ATTACK');
+      return result(game, true);
+    }
+
+    if (computerShouldDefend(game, target.id)) {
+      const defence = game.computer.hand.find((item) => item.type === 'DEFENCE');
+      if (defence) {
+        discardUsedCardMutable(game, 'COMPUTER', defence);
         addLog(game, {
-          en: 'You may play DEFENCE or accept the attack.',
-          es: 'Puedes jugar DEFENCE o aceptar el ataque.',
+          en: 'Computer played DEFENCE. The ATTACK was completely blocked.',
+          es: 'El ordenador jugó DEFENCE. El ATTACK fue bloqueado completamente.',
         });
         return result(game, true);
       }
     }
-
-    if (attack.defender === 'COMPUTER') finishAttackAgainstComputer(game, attack);
-    else resolveHitMutable(game, attack);
+    defeatUnitMutable(game, defender, player, target.id, 'ATTACK');
     return result(game, true);
   }
 
   if (card.type === 'DOCTOR') {
     const target = validTargetsForCard(game, player, card).find((unit) => unit.id === targetUnitId);
-    if (!target) return fail(gameInput, 'Select a defeated unit of the Doctor’s faction.', 'Selecciona una unidad derrotada de la facción del Doctor.');
-    useCardMutable(game, player, card);
+    if (!target) return fail(gameInput, 'Select a defeated unit you control.', 'Selecciona una unidad derrotada bajo tu control.');
+    discardUsedCardMutable(game, player, card);
     target.state = 'ALIVE';
     addLog(game, {
-      en: `${actor.en} played DOCTOR and restored ${target.name}.`,
-      es: player === 'HUMAN'
-        ? `Has jugado DOCTOR y recuperado a ${target.name}.`
-        : `El ordenador jugó DOCTOR y recuperó a ${target.name}.`,
+      en: player === 'HUMAN' ? `You played DOCTOR. ${target.name} returned to play.` : `Computer played DOCTOR. ${target.name} returned to play.`,
+      es: player === 'HUMAN' ? `Has jugado DOCTOR. ${target.name} volvió al campo de batalla.` : `El ordenador jugó DOCTOR. ${target.name} volvió al campo de batalla.`,
     });
+    return result(game, true);
+  }
 
-    if (state.faction === 'EGYPT' && !state.passiveUsed) {
-      if (player === 'HUMAN') {
-        game.phase = 'AWAIT_PASSIVE';
-        game.pendingPassive = { player, kind: 'EGYPT_RESTORATION' };
-      } else {
-        state.passiveUsed = true;
-        const drawn = drawCard(game, player, false);
-        Object.assign(game, drawn);
-        addLog(game, {
-          en: 'EGYPT Restoration drew one extra card.',
-          es: 'Restauración EGYPT robó una carta adicional.',
-        });
-      }
+  if (card.type === 'SPY') {
+    discardUsedCardMutable(game, player, card);
+    if (player === 'HUMAN') {
+      game.revealComputerHand = true;
+      game.revealReason = 'SPY';
+      addLog(game, { en: 'You played SPY and may inspect the computer hand.', es: 'Has jugado SPY y puedes mirar la mano del ordenador.' });
+    } else {
+      snapshotHumanHand(game);
+      addLog(game, { en: 'Computer played SPY and inspected your hand.', es: 'El ordenador jugó SPY y miró tu mano.' });
     }
     return result(game, true);
   }
 
-  useCardMutable(game, player, card);
-
-  if (card.type === 'SPY') {
-    if (player === 'HUMAN') game.revealComputerHand = true;
-    else game.computerKnowsHumanHand = true;
-    addLog(game, {
-      en: `${actor.en} played SPY and inspected ${possessiveText(opponentOf(player)).en} hand.`,
-      es: player === 'HUMAN'
-        ? 'Has jugado SPY y has inspeccionado la mano del ordenador.'
-        : 'El ordenador jugó SPY e inspeccionó tu mano.',
-    });
-  }
-
   if (card.type === 'SACK') {
-    const opponent = getPlayer(game, opponentOf(player));
-    const stolen = randomItem(opponent.hand);
+    discardUsedCardMutable(game, player, card);
+    const stolen = transferRandomCardMutable(game, opponentOf(player), player);
     if (stolen) {
-      removeCard(opponent.hand, stolen.instanceId);
-      state.hand.push(stolen);
       addLog(game, {
-        en: `${actor.en} played SACK and stole a random ${stolen.type}.`,
-        es: player === 'HUMAN'
-          ? `Has jugado SACK y robado al azar ${stolen.type}.`
-          : `El ordenador jugó SACK y robó al azar ${stolen.type}.`,
-      });
-    } else {
-      addLog(game, {
-        en: `${actor.en} played SACK, but the opponent had no cards.`,
-        es: player === 'HUMAN'
-          ? 'Has jugado SACK, pero el ordenador no tenía cartas.'
-          : 'El ordenador jugó SACK, pero no tenías cartas.',
+        en: player === 'HUMAN' ? `You played SACK and took ${stolen.type}.` : `Computer played SACK and took your ${stolen.type}.`,
+        es: player === 'HUMAN' ? `Has jugado SACK y has tomado ${stolen.type}.` : `El ordenador jugó SACK y tomó tu ${stolen.type}.`,
       });
     }
+    return result(game, true);
   }
 
   if (card.type === 'SABOTAGE') {
+    discardUsedCardMutable(game, player, card);
     getPlayer(game, opponentOf(player)).skipNextTurn = true;
     addLog(game, {
-      en: `${actor.en} played SABOTAGE. The opponent will skip the next turn.`,
-      es: player === 'HUMAN'
-        ? 'Has jugado SABOTAGE. El ordenador perderá su próximo turno.'
-        : 'El ordenador jugó SABOTAGE. Perderás tu próximo turno.',
+      en: player === 'HUMAN' ? 'You played SABOTAGE. Computer will completely lose its next turn.' : 'Computer played SABOTAGE. You will completely lose your next turn.',
+      es: player === 'HUMAN' ? 'Has jugado SABOTAGE. El ordenador perderá completamente su próximo turno.' : 'El ordenador jugó SABOTAGE. Perderás completamente tu próximo turno.',
     });
+    return result(game, true);
   }
 
-  return result(game, true);
+  return fail(gameInput, 'DEFENCE is reactive only.', 'DEFENCE solo puede jugarse de forma reactiva.');
 };
 
 export const resolveDefence = (gameInput: GameState, useDefence: boolean): ActionResult => {
   const game = clone(gameInput);
   const attack = game.pendingAttack;
-  if (game.phase !== 'AWAIT_DEFENCE' || !attack || attack.defender !== 'HUMAN') {
-    return fail(gameInput, 'No attack is awaiting a defence.', 'No hay ningún ataque esperando una defensa.');
+  if (!attack || game.phase !== 'AWAIT_DEFENCE' || attack.defender !== 'HUMAN') {
+    return fail(gameInput, 'There is no attack waiting for a defence decision.', 'No hay ningún ataque esperando una decisión de defensa.');
   }
-
   game.pendingAttack = undefined;
   game.phase = 'ACTION';
+
   if (useDefence) {
     const defence = game.human.hand.find((card) => card.type === 'DEFENCE');
     if (!defence) return fail(gameInput, 'No DEFENCE card is available.', 'No hay ninguna carta DEFENCE disponible.');
-    removeCard(game.human.hand, defence.instanceId);
-    discardCardInstance(game, defence);
-    addLog(game, {
-      en: 'You played DEFENCE. The attack was blocked.',
-      es: 'Has jugado DEFENCE. El ataque fue bloqueado.',
-    });
-    return result(game, true);
+    discardUsedCardMutable(game, 'HUMAN', defence);
+    addLog(game, { en: 'You played DEFENCE. The ATTACK was completely blocked.', es: 'Has jugado DEFENCE. El ATTACK fue bloqueado completamente.' });
+  } else {
+    defeatUnitMutable(game, attack.defender, attack.attacker, attack.targetUnitId, 'ATTACK');
   }
 
-  resolveHitMutable(game, attack);
+  if (!game.winner && attack.attacker === 'COMPUTER' && game.computer.hand.length <= 5) {
+    return endTurn(game, 'COMPUTER');
+  }
   return result(game, true);
-};
-
-export const resolvePassive = (gameInput: GameState, usePassive: boolean): ActionResult => {
-  const game = clone(gameInput);
-  const pending = game.pendingPassive;
-  if (game.phase !== 'AWAIT_PASSIVE' || !pending || pending.player !== 'HUMAN') {
-    return fail(gameInput, 'No passive ability is awaiting a decision.', 'No hay ninguna habilidad pasiva esperando una decisión.');
-  }
-
-  game.pendingPassive = undefined;
-  game.phase = 'ACTION';
-
-  if (pending.kind === 'ROMAN_DISCIPLINE') {
-    const attack = pending.attack;
-    game.pendingAttack = undefined;
-    if (!attack) return fail(gameInput, 'The pending attack is missing.', 'Falta el ataque pendiente.');
-    if (usePassive) {
-      game.human.passiveUsed = true;
-      addLog(game, {
-        en: 'ROMAN Discipline prevented the unit from being defeated.',
-        es: 'Disciplina ROMAN evitó que la unidad fuera derrotada.',
-      });
-      return result(game, true);
-    }
-    const defeated = defeatUnitMutable(game, attack);
-    if (defeated) maybeTriggerVikingFury(game, attack.attacker, attack.source);
-    return result(game, true);
-  }
-
-  if (!usePassive) {
-    addLog(game, {
-      en: 'You kept the passive ability available for later.',
-      es: 'Has conservado la habilidad pasiva para más adelante.',
-    });
-    return result(game, true);
-  }
-
-  game.human.passiveUsed = true;
-  const drawn = drawCard(game, 'HUMAN', false);
-  Object.assign(game, drawn);
-  addLog(game, pending.kind === 'VIKING_FURY'
-    ? { en: 'VIKING Fury drew one extra card.', es: 'Furia VIKING robó una carta adicional.' }
-    : { en: 'EGYPT Restoration drew one extra card.', es: 'Restauración EGYPT robó una carta adicional.' });
-  return result(game, true);
-};
-
-const applyEnemyDiscardPenalty = (game: GameState, player: PlayerId, card: CardInstance): void => {
-  const owner = getPlayer(game, player);
-  if (card.faction === owner.faction) return;
-
-  if (card.type === 'SPY') {
-    if (player === 'HUMAN') game.computerKnowsHumanHand = true;
-    else game.revealComputerHand = true;
-    addLog(game, {
-      en: `${actorText(player).en} discarded an enemy SPY and revealed the hand.`,
-      es: player === 'HUMAN'
-        ? 'Has descartado un SPY enemigo y revelado tu mano.'
-        : 'El ordenador descartó un SPY enemigo y reveló su mano.',
-    });
-  }
-
-  if (card.type === 'SACK') {
-    const opponent = opponentOf(player);
-    const remaining = getPlayer(game, player).hand;
-    const stolen = randomItem(remaining);
-    if (stolen) {
-      removeCard(remaining, stolen.instanceId);
-      getPlayer(game, opponent).hand.push(stolen);
-      addLog(game, {
-        en: `${actorText(opponent).en} stole a random ${stolen.type} because an enemy SACK was discarded.`,
-        es: opponent === 'HUMAN'
-          ? `Has robado al azar ${stolen.type} porque el ordenador descartó un SACK enemigo.`
-          : `El ordenador robó al azar ${stolen.type} porque descartaste un SACK enemigo.`,
-      });
-    } else {
-      addLog(game, {
-        en: 'The enemy SACK penalty had no effect because the discarding hand was empty.',
-        es: 'La penalización del SACK enemigo no tuvo efecto porque la mano quedó vacía.',
-      });
-    }
-  }
-
-  if (card.type === 'SABOTAGE') {
-    owner.skipNextTurn = true;
-    addLog(game, {
-      en: `${actorText(player).en} discarded an enemy SABOTAGE and will skip the next turn.`,
-      es: player === 'HUMAN'
-        ? 'Has descartado un SABOTAGE enemigo y perderás tu próximo turno.'
-        : 'El ordenador descartó un SABOTAGE enemigo y perderá su próximo turno.',
-    });
-  }
 };
 
 export const discardCard = (gameInput: GameState, player: PlayerId, cardInstanceId: string): ActionResult => {
   const game = clone(gameInput);
   if (!canAct(game, player)) return fail(gameInput, 'You cannot discard now.', 'No puedes descartar ahora.');
   const state = getPlayer(game, player);
-  const card = removeCard(state.hand, cardInstanceId);
-  if (!card) return fail(gameInput, 'That card is not in the hand.', 'Esa carta no está en la mano.');
-  discardCardInstance(game, card);
-  game.actionsUsedThisTurn += 1;
+  const card = state.hand.find((item) => item.instanceId === cardInstanceId);
+  if (!card) return fail(gameInput, 'That card is not in your hand.', 'Esa carta no está en tu mano.');
+
+  removeCard(state.hand, card.instanceId);
+  game.discardPile.push(card);
+  if (player === 'HUMAN') clearComputerKnowledgeIfHumanHandChanged(game);
   addLog(game, {
-    en: `${actorText(player).en} discarded ${card.type}.`,
+    en: player === 'HUMAN' ? `You discarded ${card.type}.` : `Computer discarded ${card.type}.`,
     es: player === 'HUMAN' ? `Has descartado ${card.type}.` : `El ordenador descartó ${card.type}.`,
   });
-  applyEnemyDiscardPenalty(game, player, card);
+
+  const enemyFaction = getPlayer(game, opponentOf(player)).faction;
+  const isEnemy = card.faction === enemyFaction;
+  if (!isEnemy) return result(game, true);
+
+  if (card.type === 'SPY') {
+    if (player === 'HUMAN') {
+      snapshotHumanHand(game);
+      addLog(game, { en: 'Enemy SPY discard penalty: Computer saw your entire hand.', es: 'Penalización por descartar ESPÍA enemigo: el ordenador vio toda tu mano.' });
+    } else {
+      game.revealComputerHand = true;
+      game.revealReason = 'ENEMY_SPY_DISCARD';
+      addLog(game, { en: 'Enemy SPY discard penalty: Computer must reveal its entire hand to you.', es: 'Penalización por descartar ESPÍA enemigo: el ordenador debe mostrarte toda su mano.' });
+    }
+  } else if (card.type === 'SACK') {
+    const transferred = transferRandomCardMutable(game, player, opponentOf(player));
+    if (transferred) {
+      addLog(game, {
+        en: player === 'HUMAN' ? `Enemy SACK discard penalty: Computer took your ${transferred.type}.` : `Enemy SACK discard penalty: You received ${transferred.type} from the computer.`,
+        es: player === 'HUMAN' ? `Penalización por descartar SAQUEO enemigo: el ordenador tomó tu ${transferred.type}.` : `Penalización por descartar SAQUEO enemigo: recibiste ${transferred.type} del ordenador.`,
+      });
+    }
+  } else if (card.type === 'SABOTAGE') {
+    state.skipNextTurn = true;
+    addLog(game, {
+      en: player === 'HUMAN' ? 'Enemy SABOTAGE discard penalty: You will completely lose your next turn.' : 'Enemy SABOTAGE discard penalty: Computer will completely lose its next turn.',
+      es: player === 'HUMAN' ? 'Penalización por descartar SABOTAJE enemigo: perderás completamente tu próximo turno.' : 'Penalización por descartar SABOTAJE enemigo: el ordenador perderá completamente su próximo turno.',
+    });
+  }
+
   return result(game, true);
 };
 
 export const endTurn = (gameInput: GameState, player: PlayerId): ActionResult => {
-  const game = clone(gameInput);
-  if (game.winner) return fail(gameInput, 'The match has already ended.', 'La partida ya ha terminado.');
-  if (game.currentPlayer !== player || game.phase !== 'ACTION') {
-    return fail(gameInput, 'The turn cannot end during another action.', 'El turno no puede terminar durante otra acción.');
+  if (!canAct(gameInput, player)) return fail(gameInput, 'You cannot end the turn now.', 'No puedes terminar el turno ahora.');
+  if (getPlayer(gameInput, player).hand.length > 5) {
+    return fail(gameInput, 'Reduce your hand to five cards or fewer before ending the turn.', 'Reduce tu mano a cinco cartas o menos antes de terminar el turno.');
   }
-  if (game.actionsUsedThisTurn < 1) {
-    return fail(gameInput, 'Play or discard at least one card before ending the turn.', 'Juega o descarta al menos una carta antes de terminar el turno.');
-  }
-  return result(startTurn(game, opponentOf(player)), true);
-};
-
-const playableCards = (game: GameState, player: PlayerId): CardInstance[] =>
-  getPlayer(game, player).hand.filter((card) => canPlayCard(game, player, card));
-
-const chooseTarget = (game: GameState, player: PlayerId, card: CardInstance, skilled: boolean): Unit | undefined => {
-  const targets = validTargetsForCard(game, player, card);
-  if (!skilled) return randomItem(targets);
-  return targets[0];
-};
-
-const chooseComputerCard = (game: GameState): CardInstance | undefined => {
-  const player = game.computer;
-  const cards = playableCards(game, 'COMPUTER');
-  const byType = (type: CardType) => cards.find((card) => card.type === type);
-  const ownDoctor = cards.find((card) => card.type === 'DOCTOR' && card.faction === player.faction);
-
-  if (game.difficulty === 'SIMPLE') {
-    return ownDoctor
-      ?? byType('ATTACK')
-      ?? byType('AMBUSH')
-      ?? byType('SABOTAGE')
-      ?? byType('SACK')
-      ?? byType('SPY');
-  }
-
-  const humanAlive = livingUnitCount(game, 'HUMAN');
-  const computerAlive = livingUnitCount(game, 'COMPUTER');
-  const humanHasDefence = game.computerKnowsHumanHand && game.human.hand.some((card) => card.type === 'DEFENCE');
-
-  if (ownDoctor && (computerAlive <= 2 || computerAlive < humanAlive)) return ownDoctor;
-  if (!game.computerKnowsHumanHand && byType('SPY')) return byType('SPY');
-  if (humanHasDefence && byType('AMBUSH')) return byType('AMBUSH');
-  if (humanAlive <= 2 && byType('ATTACK')) return byType('ATTACK');
-  if (game.human.hand.length >= 4 && byType('SACK')) return byType('SACK');
-  if (humanAlive > computerAlive && byType('SABOTAGE')) return byType('SABOTAGE');
-  return byType('ATTACK')
-    ?? byType('AMBUSH')
-    ?? ownDoctor
-    ?? byType('SABOTAGE')
-    ?? byType('SACK')
-    ?? byType('SPY');
-};
-
-export const aiStep = (gameInput: GameState, player: PlayerId = 'COMPUTER', difficulty?: Difficulty): GameState => {
-  let game = clone(gameInput);
-  if (game.winner || game.phase !== 'ACTION' || game.currentPlayer !== player) return game;
-  if (difficulty) game.difficulty = difficulty;
-
-  if (game.actionsUsedThisTurn >= 2) return endTurn(game, player).state;
-
-  const card = player === 'COMPUTER'
-    ? chooseComputerCard(game)
-    : playableCards(game, player)[0];
-
-  if (card) {
-    const target = chooseTarget(game, player, card, game.difficulty === 'SKILLED');
-    const played = playCard(game, player, card.instanceId, target?.id);
-    game = played.state;
-  } else {
-    const state = getPlayer(game, player);
-    const discard = game.difficulty === 'SKILLED'
-      ? state.hand.find((item) => item.type === 'DOCTOR' && item.faction !== state.faction)
-        ?? state.hand.find((item) => !['SPY', 'SACK', 'SABOTAGE'].includes(item.type) || item.faction === state.faction)
-        ?? state.hand[0]
-      : randomItem(state.hand);
-    if (discard) game = discardCard(game, player, discard.instanceId).state;
-  }
-
-  if (game.winner || game.phase !== 'ACTION') return game;
-  if (game.actionsUsedThisTurn >= 2) return endTurn(game, player).state;
-
-  const stillUseful = playableCards(game, player).length > 0;
-  if (!stillUseful || game.actionsUsedThisTurn >= 1 && Math.random() < 0.25) {
-    return endTurn(game, player).state;
-  }
-  return game;
-};
-
-export const autoResolvePending = (gameInput: GameState): GameState => {
-  let game = gameInput;
-  if (game.phase === 'AWAIT_DEFENCE') {
-    const useDefence = game.human.hand.some((card) => card.type === 'DEFENCE');
-    game = resolveDefence(game, useDefence).state;
-  }
-  if (game.phase === 'AWAIT_PASSIVE') game = resolvePassive(game, true).state;
-  return game;
+  const game = beginTurn(gameInput, opponentOf(player));
+  return result(game, true);
 };
 
 export const closeComputerHandReveal = (gameInput: GameState): GameState => {
   const game = clone(gameInput);
   game.revealComputerHand = false;
+  game.revealReason = undefined;
+  if (game.currentPlayer === 'COMPUTER' && game.phase === 'ACTION' && game.computer.hand.length <= 5) {
+    return endTurn(game, 'COMPUTER').state;
+  }
   return game;
+};
+
+const chooseTarget = (game: GameState, player: PlayerId, card: CardInstance, difficulty: Difficulty): Unit | undefined => {
+  const targets = validTargetsForCard(game, player, card);
+  if (targets.length === 0) return undefined;
+  if (card.type === 'DOCTOR') return targets[0];
+  if (difficulty === 'SKILLED') return targets[0];
+  return randomItem(targets);
+};
+
+const priorityScore = (game: GameState, card: CardInstance, difficulty: Difficulty): number => {
+  const humanLiving = livingUnitCount(game, 'HUMAN');
+  const computerLiving = livingUnitCount(game, 'COMPUTER');
+  if (difficulty === 'SIMPLE') {
+    const scores: Record<CardInstance['type'], number> = { DOCTOR: 70, ATTACK: 65, AMBUSH: 60, SABOTAGE: 50, SACK: 40, SPY: 30, DEFENCE: -100 };
+    return scores[card.type];
+  }
+  if (humanLiving === 1 && card.type === 'AMBUSH') return 120;
+  if (humanLiving === 1 && card.type === 'ATTACK') return 115;
+  if (game.computerKnownHumanHand?.some((known) => known.type === 'DEFENCE') && card.type === 'AMBUSH') return 110;
+  if (computerLiving <= 2 && card.type === 'DOCTOR') return 105;
+  const scores: Record<CardInstance['type'], number> = { SABOTAGE: 90, AMBUSH: 86, ATTACK: 82, DOCTOR: 78, SACK: 70, SPY: 62, DEFENCE: -100 };
+  return scores[card.type];
+};
+
+const chooseComputerPlay = (game: GameState): CardInstance | undefined => {
+  const playable = game.computer.hand.filter((card) => canPlayCard(game, 'COMPUTER', card));
+  return playable.sort((a, b) => priorityScore(game, b, game.difficulty) - priorityScore(game, a, game.difficulty))[0];
+};
+
+const chooseComputerDiscard = (game: GameState): CardInstance | undefined => {
+  const enemyFaction = game.human.faction;
+  const dangerous = (card: CardInstance): boolean => card.faction === enemyFaction && ['SPY', 'SACK', 'SABOTAGE'].includes(card.type);
+  const ownOrSafe = game.computer.hand.filter((card) => !dangerous(card));
+  const pool = ownOrSafe.length > 0 ? ownOrSafe : game.computer.hand;
+  return pool.sort((a, b) => priorityScore(game, a, game.difficulty) - priorityScore(game, b, game.difficulty))[0];
+};
+
+export const aiStep = (gameInput: GameState): GameState => {
+  if (gameInput.winner || gameInput.phase !== 'ACTION' || gameInput.currentPlayer !== 'COMPUTER' || gameInput.revealComputerHand) return gameInput;
+  const mustReduce = gameInput.computer.hand.length > 5;
+  const card = chooseComputerPlay(gameInput);
+
+  if (card) {
+    const target = chooseTarget(gameInput, 'COMPUTER', card, gameInput.difficulty);
+    const action = playCard(gameInput, 'COMPUTER', card.instanceId, target?.id);
+    if (!action.ok) return gameInput;
+    const next = action.state;
+    if (next.winner || next.phase !== 'ACTION' || next.revealComputerHand) return next;
+    if (next.computer.hand.length <= 5) return endTurn(next, 'COMPUTER').state;
+    return next;
+  }
+
+  if (mustReduce) {
+    const discard = chooseComputerDiscard(gameInput);
+    if (!discard) return gameInput;
+    const action = discardCard(gameInput, 'COMPUTER', discard.instanceId);
+    if (!action.ok) return gameInput;
+    if (action.state.revealComputerHand) return action.state;
+    if (action.state.computer.hand.length <= 5) return endTurn(action.state, 'COMPUTER').state;
+    return action.state;
+  }
+
+  return endTurn(gameInput, 'COMPUTER').state;
+};
+
+export const autoStepForTests = (gameInput: GameState, player: PlayerId): GameState => {
+  if (gameInput.winner || gameInput.phase !== 'ACTION' || gameInput.currentPlayer !== player) return gameInput;
+  if (player === 'COMPUTER') return aiStep(gameInput);
+
+  const state = getPlayer(gameInput, 'HUMAN');
+  const playable = state.hand
+    .filter((card) => canPlayCard(gameInput, 'HUMAN', card))
+    .sort((a, b) => priorityScore(gameInput, b, 'SKILLED') - priorityScore(gameInput, a, 'SKILLED'));
+  const card = playable[0];
+  if (card) {
+    const target = chooseTarget(gameInput, 'HUMAN', card, 'SKILLED');
+    const action = playCard(gameInput, 'HUMAN', card.instanceId, target?.id);
+    let next = action.state;
+    if (next.phase === 'AWAIT_DEFENCE') next = resolveDefence(next, Boolean(next.human.hand.find((item) => item.type === 'DEFENCE'))).state;
+    if (next.winner || next.phase !== 'ACTION' || next.revealComputerHand) {
+      if (next.revealComputerHand) next = closeComputerHandReveal(next);
+      return next;
+    }
+    if (next.human.hand.length <= 5) return endTurn(next, 'HUMAN').state;
+    return next;
+  }
+  if (state.hand.length > 5) {
+    const action = discardCard(gameInput, 'HUMAN', state.hand[0].instanceId);
+    if (action.state.revealComputerHand) return closeComputerHandReveal(action.state);
+    return action.state.human.hand.length <= 5 ? endTurn(action.state, 'HUMAN').state : action.state;
+  }
+  return endTurn(gameInput, 'HUMAN').state;
 };

@@ -1,64 +1,262 @@
-import { createMatchDeck } from '../lib/cards';
-import { FACTIONS } from '../lib/factions';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { getCardDefinition } from '../lib/cards';
 import {
-  aiStep,
-  autoResolvePending,
-  getPlayer,
-  livingUnitCount,
+  autoStepForTests,
+  beginTurn,
+  canEndTurn,
+  canPlayCard,
+  closeComputerHandReveal,
+  discardCard,
+  endTurn,
+  playCard,
+  resolveDefence,
   startGame,
 } from '../lib/gameEngine';
-import { Difficulty, Faction, GameState } from '../lib/types';
+import type { CardInstance, CardType, Difficulty, Faction, GameState, PlayerId } from '../lib/types';
 
-function assert(condition: unknown, message: string): asserts condition {
-  if (!condition) throw new Error(message);
-}
+let sequence = 0;
+const makeCard = (faction: Faction, type: CardType): CardInstance => ({
+  instanceId: `test-${faction}-${type}-${sequence += 1}`,
+  faction,
+  type,
+  symbol: getCardDefinition(type).symbol,
+});
 
-for (const faction of FACTIONS) {
-  const opponent = FACTIONS.find((candidate) => candidate !== faction) as Faction;
-  const deck = createMatchDeck(faction, opponent);
-  assert(deck.length === 40, `${faction} match deck should contain 40 cards`);
-  assert(deck.filter((card) => card.faction === faction).length === 20, `${faction} should contribute 20 cards`);
-  assert(deck.filter((card) => card.type === 'ATTACK').length === 10, 'Match deck should contain 10 ATTACK cards');
-  assert(deck.filter((card) => card.type === 'DEFENCE').length === 10, 'Match deck should contain 10 DEFENCE cards');
-  for (const type of ['DOCTOR', 'SPY', 'SACK', 'SABOTAGE', 'AMBUSH'] as const) {
-    assert(deck.filter((card) => card.type === type).length === 4, `Match deck should contain 4 ${type} cards`);
-  }
-}
+const readyGame = (human: Faction = 'ROMAN', computer: Faction = 'VIKING', difficulty: Difficulty = 'SKILLED'): GameState =>
+  startGame({ humanFaction: human, computerFaction: computer, difficulty }, () => 0.1);
 
-const runMatch = (humanFaction: Faction, computerFaction: Faction, difficulty: Difficulty): GameState => {
-  let game = startGame({ humanFaction, computerFaction, difficulty });
-
-  for (let step = 0; step < 2500 && !game.winner; step += 1) {
-    game = autoResolvePending(game);
-    if (game.winner) break;
-
-    if (game.phase === 'ACTION') {
-      game = aiStep(game, game.currentPlayer, difficulty);
-    }
-  }
-
-  assert(game.winner, `${humanFaction} vs ${computerFaction} (${difficulty}) stalled without a winner`);
-  const winner = game.winner;
-  assert(livingUnitCount(game, winner) > 0, 'Winner must have at least one living unit');
-  assert(livingUnitCount(game, winner === 'HUMAN' ? 'COMPUTER' : 'HUMAN') === 0, 'Loser must have no living units');
-  assert(game.turnNumber > 0, 'Turn counter must advance');
-  assert(game.log.length > 0, 'Game log must contain entries');
-  assert(getPlayer(game, 'HUMAN').units.length === 5, 'Human must retain five unit records');
-  assert(getPlayer(game, 'COMPUTER').units.length === 5, 'Computer must retain five unit records');
-  return game;
+const activeHumanGame = (): GameState => {
+  const game = readyGame();
+  return beginTurn(game, 'HUMAN');
 };
 
-let completed = 0;
-for (const humanFaction of FACTIONS) {
-  for (const computerFaction of FACTIONS) {
-    if (humanFaction === computerFaction) continue;
+const targetId = (game: GameState, player: PlayerId, index = 0): string =>
+  (player === 'HUMAN' ? game.human.units : game.computer.units)[index].id;
+
+// 1. Opening hands are five cards each.
+{
+  const game = readyGame();
+  assert.equal(game.human.hand.length, 5);
+  assert.equal(game.computer.hand.length, 5);
+}
+
+// 2. Each side starts with five living units.
+{
+  const game = readyGame();
+  assert.equal(game.human.units.filter((unit) => unit.state === 'ALIVE').length, 5);
+  assert.equal(game.computer.units.filter((unit) => unit.state === 'ALIVE').length, 5);
+}
+
+// 3. Starting player is genuinely randomisable, not hard-coded HUMAN.
+{
+  const humanStarts = startGame({ humanFaction: 'ROMAN', computerFaction: 'VIKING', difficulty: 'SIMPLE' }, () => 0.1);
+  const computerStarts = startGame({ humanFaction: 'ROMAN', computerFaction: 'VIKING', difficulty: 'SIMPLE' }, () => 0.9);
+  assert.equal(humanStarts.startingPlayer, 'HUMAN');
+  assert.equal(computerStarts.startingPlayer, 'COMPUTER');
+}
+
+// 4. A normal turn draws exactly one card when a card is available.
+{
+  const game = readyGame();
+  const before = game.human.hand.length;
+  const after = beginTurn(game, 'HUMAN');
+  assert.equal(after.human.hand.length, before + 1);
+}
+
+// 5. A player cannot end a turn with more than five cards.
+{
+  const game = activeHumanGame();
+  assert.ok(game.human.hand.length > 5);
+  assert.equal(canEndTurn(game, 'HUMAN'), false);
+  assert.equal(endTurn(game, 'HUMAN').ok, false);
+}
+
+// 6. A player can pass/end when hand <= 5.
+{
+  const game = activeHumanGame();
+  game.human.hand = game.human.hand.slice(0, 5);
+  assert.equal(canEndTurn(game, 'HUMAN'), true);
+  assert.equal(endTurn(game, 'HUMAN').ok, true);
+}
+
+// 7. ATTACK can defeat a unit.
+{
+  const game = activeHumanGame();
+  game.human.hand = [makeCard('ROMAN', 'ATTACK')];
+  game.computer.hand = [];
+  const action = playCard(game, 'HUMAN', game.human.hand[0].instanceId, targetId(game, 'COMPUTER'));
+  assert.equal(action.ok, true);
+  assert.equal(action.state.computer.units[0].state, 'DEFEATED');
+}
+
+// 8. DEFENCE blocks ATTACK.
+{
+  const game = activeHumanGame();
+  game.currentPlayer = 'COMPUTER';
+  game.computer.hand = [makeCard('VIKING', 'ATTACK')];
+  game.human.hand = [makeCard('ROMAN', 'DEFENCE')];
+  const attack = playCard(game, 'COMPUTER', game.computer.hand[0].instanceId, targetId(game, 'HUMAN'));
+  assert.equal(attack.state.phase, 'AWAIT_DEFENCE');
+  const defended = resolveDefence(attack.state, true);
+  assert.equal(defended.state.human.units[0].state, 'ALIVE');
+}
+
+// 9. DEFENCE cannot be proactively played.
+{
+  const game = activeHumanGame();
+  game.human.hand = [makeCard('ROMAN', 'DEFENCE')];
+  assert.equal(canPlayCard(game, 'HUMAN', game.human.hand[0]), false);
+}
+
+// 10. AMBUSH cannot be defended.
+{
+  const game = activeHumanGame();
+  game.human.hand = [makeCard('ROMAN', 'AMBUSH')];
+  game.computer.hand = [makeCard('VIKING', 'DEFENCE')];
+  const action = playCard(game, 'HUMAN', game.human.hand[0].instanceId, targetId(game, 'COMPUTER'));
+  assert.equal(action.state.computer.units[0].state, 'DEFEATED');
+  assert.equal(action.state.computer.hand.length, 1);
+}
+
+// 11. DOCTOR restores a defeated unit controlled by the player.
+{
+  const game = activeHumanGame();
+  game.human.units[0].state = 'DEFEATED';
+  game.human.hand = [makeCard('VIKING', 'DOCTOR')];
+  const action = playCard(game, 'HUMAN', game.human.hand[0].instanceId, targetId(game, 'HUMAN'));
+  assert.equal(action.state.human.units[0].state, 'ALIVE');
+}
+
+// 12. Human SPY reveals the computer hand.
+{
+  const game = activeHumanGame();
+  game.human.hand = [makeCard('ROMAN', 'SPY')];
+  const action = playCard(game, 'HUMAN', game.human.hand[0].instanceId);
+  assert.equal(action.state.revealComputerHand, true);
+}
+
+// 13. SACK transfers a random card rather than discarding it.
+{
+  const game = activeHumanGame();
+  game.human.hand = [makeCard('ROMAN', 'SACK')];
+  game.computer.hand = [makeCard('VIKING', 'ATTACK')];
+  const action = playCard(game, 'HUMAN', game.human.hand[0].instanceId);
+  assert.equal(action.state.human.hand.length, 1);
+  assert.equal(action.state.human.hand[0].type, 'ATTACK');
+  assert.equal(action.state.computer.hand.length, 0);
+}
+
+// 14. SABOTAGE skips the entire next turn, including draw.
+{
+  const game = activeHumanGame();
+  game.human.hand = [makeCard('ROMAN', 'SABOTAGE')];
+  const played = playCard(game, 'HUMAN', game.human.hand[0].instanceId).state;
+  const computerBefore = played.computer.hand.length;
+  const advanced = endTurn(played, 'HUMAN').state;
+  assert.equal(advanced.computer.hand.length, computerBefore);
+  assert.equal(advanced.computer.skipNextTurn, false);
+  assert.equal(advanced.currentPlayer, 'HUMAN');
+}
+
+// 15. Discarding an enemy SPY reveals the human hand to the computer.
+{
+  const game = activeHumanGame();
+  game.human.hand = [makeCard('VIKING', 'SPY'), makeCard('ROMAN', 'ATTACK')];
+  const action = discardCard(game, 'HUMAN', game.human.hand[0].instanceId);
+  assert.ok(action.state.computerKnownHumanHand);
+  assert.equal(action.state.computerKnownHumanHand?.length, 1);
+}
+
+// 16. Discarding an enemy SACK transfers a random card to that faction owner.
+{
+  const game = activeHumanGame();
+  game.human.hand = [makeCard('VIKING', 'SACK'), makeCard('ROMAN', 'ATTACK')];
+  game.computer.hand = [];
+  const action = discardCard(game, 'HUMAN', game.human.hand[0].instanceId);
+  assert.equal(action.state.human.hand.length, 0);
+  assert.equal(action.state.computer.hand.length, 1);
+  assert.equal(action.state.computer.hand[0].type, 'ATTACK');
+}
+
+// 17. Discarding an enemy SABOTAGE makes the discarder lose their next turn.
+{
+  const game = activeHumanGame();
+  game.human.hand = [makeCard('VIKING', 'SABOTAGE')];
+  const action = discardCard(game, 'HUMAN', game.human.hand[0].instanceId);
+  assert.equal(action.state.human.skipNextTurn, true);
+}
+
+// 18. Other enemy cards discard normally without special penalty.
+{
+  const game = activeHumanGame();
+  game.human.hand = [makeCard('VIKING', 'ATTACK')];
+  const computerBefore = game.computer.hand.length;
+  const action = discardCard(game, 'HUMAN', game.human.hand[0].instanceId);
+  assert.equal(action.state.human.skipNextTurn, false);
+  assert.equal(action.state.computerKnownHumanHand, null);
+  assert.equal(action.state.computer.hand.length, computerBefore);
+}
+
+// 19. No obsolete faction passive ability state or source logic remains.
+{
+  const game = readyGame();
+  assert.equal('passiveUsed' in game.human, false);
+  const files = ['lib/types.ts', 'lib/factions.ts', 'lib/gameEngine.ts', 'components/KlansApp.tsx', 'README.md'];
+  const forbidden = ['passiveUsed', 'ROMAN_DISCIPLINE', 'VIKING_FURY', 'EGYPT_RESTORATION', 'SAMURAI_HONOUR', 'AWAIT_PASSIVE', 'actionsUsedThisTurn'];
+  for (const file of files) {
+    const source = readFileSync(join(process.cwd(), file), 'utf8');
+    for (const token of forbidden) assert.equal(source.includes(token), false, `${file} still contains ${token}`);
+  }
+}
+
+// 20. Defeating the final enemy unit conquers that faction and wins the solo match.
+{
+  const game = activeHumanGame();
+  game.computer.units.slice(0, 4).forEach((unit) => { unit.state = 'DEFEATED'; });
+  game.computer.hand = [];
+  game.human.hand = [makeCard('ROMAN', 'ATTACK')];
+  const action = playCard(game, 'HUMAN', game.human.hand[0].instanceId, targetId(game, 'COMPUTER', 4));
+  assert.equal(action.state.winner, 'HUMAN');
+  assert.equal(action.state.conqueredFaction, 'VIKING');
+}
+
+// 21-22. Automated matches terminate legally for both SIMPLE and SKILLED AI.
+const factions: Faction[] = ['ROMAN', 'VIKING', 'EGYPT', 'SAMURAI'];
+let simulations = 0;
+for (const human of factions) {
+  for (const computer of factions) {
+    if (human === computer) continue;
     for (const difficulty of ['SIMPLE', 'SKILLED'] as Difficulty[]) {
-      for (let repetition = 0; repetition < 4; repetition += 1) {
-        runMatch(humanFaction, computerFaction, difficulty);
-        completed += 1;
+      for (let seed = 0; seed < 4; seed += 1) {
+        let cursor = 0;
+        const rng = () => {
+          cursor += 1;
+          const value = Math.sin((seed + 1) * 97 + cursor * 13) * 10000;
+          return value - Math.floor(value);
+        };
+        let game = startGame({ humanFaction: human, computerFaction: computer, difficulty }, rng);
+        game = beginTurn(game);
+        let steps = 0;
+        while (!game.winner && steps < 500) {
+          if (game.revealComputerHand) {
+            game = closeComputerHandReveal(game);
+          } else if (game.phase === 'AWAIT_DEFENCE') {
+            const canDefend = game.human.hand.some((card) => card.type === 'DEFENCE');
+            game = resolveDefence(game, canDefend).state;
+          } else if (game.phase === 'ACTION') {
+            game = autoStepForTests(game, game.currentPlayer);
+          }
+          steps += 1;
+        }
+        assert.ok(game.winner, `${difficulty} match ${human} vs ${computer} did not terminate`);
+        assert.ok(steps < 500, 'simulation guard reached');
+        simulations += 1;
       }
     }
   }
 }
 
-console.log(`KLANS engine smoke test passed: ${completed} complete matches.`);
+assert.equal(simulations, 96);
+console.log(`KLANS engine smoke tests passed: 20 targeted rule checks + ${simulations} complete automated matches.`);
