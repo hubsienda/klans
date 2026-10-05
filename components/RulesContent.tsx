@@ -6,6 +6,11 @@ import { useSite } from './SiteProvider';
 
 export function RulesContent() {
   const { language } = useSite();
+  const currentYear = new Date().getFullYear();
+  const copyrightNotice = language === 'en'
+    ? `KLANS, its rules, game system, names, artwork and associated game materials are protected by copyright. © ${currentYear} Naralimon s.c. All rights reserved.`
+    : `KLANS, sus reglas, sistema de juego, nombres, ilustraciones y materiales asociados están protegidos por derechos de autor. © ${currentYear} Naralimon s.c. Todos los derechos reservados.`;
+
   return (
     <main className="site-container py-10 sm:py-14">
       <header className="max-w-3xl">
@@ -42,6 +47,7 @@ export function RulesContent() {
               </div>
             </section>
           ))}
+          <p className="border-t border-[var(--line)] pt-5 text-xs leading-6 text-[var(--muted)]">{copyrightNotice}</p>
         </article>
       </div>
     </main>
