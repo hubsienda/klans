@@ -28,7 +28,7 @@ export function HomeContent() {
             <h1 className="mt-7 max-w-3xl font-cinzel text-3xl font-semibold leading-tight sm:text-5xl">{copy('homeHero')}</h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-[var(--muted)] sm:text-lg">{copy('homeIntro')}</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Link className="primary-button justify-center" href="/play">{copy('playKlans')} <span>→</span></Link>
+              <Link className="primary-button justify-center" href="/play">{copy('playKlanz')} <span>→</span></Link>
               <Link className="secondary-button justify-center" href="/rules">{copy('discoverGame')}</Link>
             </div>
           </div>
@@ -106,7 +106,7 @@ export function HomeContent() {
             <p className="eyebrow !text-white/60">{copy('playOnline')}</p>
             <p className="mt-4 text-lg leading-7">{copy('onlineNote')}</p>
             <p className="mt-3 text-sm leading-6 opacity-65">{copy('tabletopNote')}</p>
-            <Link href="/play" className="mt-7 inline-flex rounded-xl bg-[#CFA24A] px-5 py-3 text-sm font-bold text-[#1f180b]">{copy('playKlans')} →</Link>
+            <Link href="/play" className="mt-7 inline-flex rounded-xl bg-[#CFA24A] px-5 py-3 text-sm font-bold text-[#1f180b]">{copy('playKlanz')} →</Link>
           </div>
         </div>
       </section>
