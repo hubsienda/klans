@@ -24,7 +24,7 @@ import type { CardInstance, Difficulty, Faction, GameState, Unit } from '@/lib/t
 import { randomItem } from '@/lib/utils';
 import { useSite } from './SiteProvider';
 
-export function KlansApp() {
+export function KlanzApp() {
   const { language } = useSite();
   const [screen, setScreen] = useState<'SETUP' | 'GAME' | 'END'>('SETUP');
   const [humanFaction, setHumanFaction] = useState<Faction>('ROMAN');
@@ -72,7 +72,7 @@ export function KlansApp() {
     return (
       <main className="site-container py-10 sm:py-14">
         <header className="max-w-3xl">
-          <p className="eyebrow">KLANS ONLINE</p>
+          <p className="eyebrow">KLANZ ONLINE</p>
           <h1 className="section-title">{language === 'en' ? 'Human vs Computer' : 'Humano contra Ordenador'}</h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--muted)]">{copy('onlineNote')} {copy('tabletopNote')}</p>
         </header>

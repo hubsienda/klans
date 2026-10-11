@@ -60,8 +60,8 @@ export function SiteProvider({ children }: { children: React.ReactNode }) {
         <div className="flex min-h-screen flex-col bg-[var(--page)] text-[var(--ink)]">
           <header className="sticky top-0 z-50 border-b border-[var(--line)] bg-[var(--page-alpha)] backdrop-blur-xl">
             <div className="site-container flex min-h-[68px] items-center justify-between gap-4">
-              <Link href="/" className="flex items-center" aria-label="KLANS home" onClick={() => setMenuOpen(false)}>
-                <Image src="/logo.png" alt="KLANS" width={160} height={54} className="h-9 w-auto object-contain" priority />
+              <Link href="/" className="flex items-center" aria-label="KLANZ home" onClick={() => setMenuOpen(false)}>
+                <Image src="/logo.png" alt="KLANZ" width={160} height={54} className="h-9 w-auto object-contain" priority />
               </Link>
               <nav className="hidden items-center gap-7 lg:flex" aria-label="Primary navigation">
                 {nav.map((item) => (

@@ -20,14 +20,14 @@ const currentYear = new Date().getFullYear();
 
 export const metadata: Metadata = {
   title: {
-    default: 'KLANS — Strategic Card Game',
-    template: '%s | KLANS',
+    default: 'KLANZ — Strategic Card Game',
+    template: '%s | KLANZ',
   },
-  description: 'KLANS is a strategic faction card game of survival, conquest, diplomacy and betrayal, with a Human-vs-Computer browser adaptation.',
+  description: 'KLANZ is a strategic faction card game of survival, conquest, diplomacy and betrayal, with a Human-vs-Computer browser adaptation.',
   creator: 'Naralimon s.c.',
   publisher: 'Naralimon s.c.',
   other: {
-    copyright: `© ${currentYear} Naralimon s.c. KLANS. All rights reserved.`,
+    copyright: `© ${currentYear} Naralimon s.c. KLANZ. All rights reserved.`,
   },
   icons: { icon: '/favicon.png', shortcut: '/favicon.png', apple: '/favicon.png' },
 };

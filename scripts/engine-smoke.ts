@@ -203,7 +203,7 @@ const targetId = (game: GameState, player: PlayerId, index = 0): string =>
 {
   const game = readyGame();
   assert.equal('passiveUsed' in game.human, false);
-  const files = ['lib/types.ts', 'lib/factions.ts', 'lib/gameEngine.ts', 'components/KlansApp.tsx', 'README.md'];
+  const files = ['lib/types.ts', 'lib/factions.ts', 'lib/gameEngine.ts', 'components/KlanzApp.tsx', 'README.md'];
   const forbidden = ['passiveUsed', 'ROMAN_DISCIPLINE', 'VIKING_FURY', 'EGYPT_RESTORATION', 'SAMURAI_HONOUR', 'AWAIT_PASSIVE', 'actionsUsedThisTurn'];
   for (const file of files) {
     const source = readFileSync(join(process.cwd(), file), 'utf8');
@@ -259,4 +259,4 @@ for (const human of factions) {
 }
 
 assert.equal(simulations, 96);
-console.log(`KLANS engine smoke tests passed: 20 targeted rule checks + ${simulations} complete automated matches.`);
+console.log(`KLANZ engine smoke tests passed: 20 targeted rule checks + ${simulations} complete automated matches.`);
