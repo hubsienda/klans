@@ -1,16 +1,16 @@
-# KLANS
+# KLANZ
 
-KLANS is the website and browser adaptation for the KLANS tabletop card game.
+KLANZ is the website and browser adaptation for the KLANZ tabletop card game.
 
 ## Copyright
 
-Naralimon s.c. is the copyright owner of KLANS. KLANS, its rules, game system, names, artwork and associated game materials are protected by copyright. All rights reserved.
+Naralimon s.c. is the copyright owner of KLANZ. KLANZ, its rules, game system, names, artwork and associated game materials are protected by copyright. All rights reserved.
 
 ## Website
 
 The App Router site contains seven routes:
 
-- `/` — KLANS homepage
+- `/` — KLANZ homepage
 - `/play` — Human-vs-Computer online adaptation
 - `/rules` — complete tabletop rules
 - `/factions` — ROMAN, VIKING, EGYPT and SAMURAI, with all twenty supplied unit images

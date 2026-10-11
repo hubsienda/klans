@@ -8,13 +8,13 @@ export function RulesContent() {
   const { language } = useSite();
   const currentYear = new Date().getFullYear();
   const copyrightNotice = language === 'en'
-    ? `KLANS, its rules, game system, names, artwork and associated game materials are protected by copyright. © ${currentYear} Naralimon s.c. All rights reserved.`
-    : `KLANS, sus reglas, sistema de juego, nombres, ilustraciones y materiales asociados están protegidos por derechos de autor. © ${currentYear} Naralimon s.c. Todos los derechos reservados.`;
+    ? `KLANZ, its rules, game system, names, artwork and associated game materials are protected by copyright. © ${currentYear} Naralimon s.c. All rights reserved.`
+    : `KLANZ, sus reglas, sistema de juego, nombres, ilustraciones y materiales asociados están protegidos por derechos de autor. © ${currentYear} Naralimon s.c. Todos los derechos reservados.`;
 
   return (
     <main className="site-container py-10 sm:py-14">
       <header className="max-w-3xl">
-        <p className="eyebrow">KLANS</p>
+        <p className="eyebrow">KLANZ</p>
         <h1 className="section-title">{t(language, 'rules')}</h1>
         <p className="mt-4 text-base leading-7 text-[var(--muted)]">
           {language === 'en'

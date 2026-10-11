@@ -12,20 +12,20 @@ export function SiteFooter({ language }: { language: Language }) {
         privacy: 'Privacy Policy',
         cookies: 'Cookie Policy',
         settings: 'Cookie Settings',
-        copyright: `© ${currentYear} Naralimon s.c. KLANS. All rights reserved.`,
+        copyright: `© ${currentYear} Naralimon s.c. KLANZ. All rights reserved.`,
       }
     : {
         privacy: 'Política de Privacidad',
         cookies: 'Política de Cookies',
         settings: 'Configurar cookies',
-        copyright: `© ${currentYear} Naralimon s.c. KLANS. Todos los derechos reservados.`,
+        copyright: `© ${currentYear} Naralimon s.c. KLANZ. Todos los derechos reservados.`,
       };
 
   return (
     <footer className="border-t border-[var(--line)] py-7">
       <div className="site-container flex flex-col gap-4 text-xs text-[var(--muted)]">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <strong className="font-cinzel text-sm tracking-[0.12em] text-[var(--ink)]">KLANS</strong>
+          <strong className="font-cinzel text-sm tracking-[0.12em] text-[var(--ink)]">KLANZ</strong>
           <nav className="flex flex-wrap items-center gap-x-4 gap-y-2" aria-label={language === 'en' ? 'Legal links' : 'Enlaces legales'}>
             <Link href="/privacy" className="text-link">{copy.privacy}</Link>
             <Link href="/cookies" className="text-link">{copy.cookies}</Link>

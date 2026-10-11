@@ -3,7 +3,7 @@ import { ActionCardsContent } from '@/components/ActionCardsContent';
 
 export const metadata: Metadata = {
   title: 'Action Cards',
-  description: 'Explore the seven official KLANS action-card types: ATTACK, DEFENCE, DOCTOR, SPY, SACK, SABOTAGE and AMBUSH.',
+  description: 'Explore the seven official KLANZ action-card types: ATTACK, DEFENCE, DOCTOR, SPY, SACK, SABOTAGE and AMBUSH.',
 };
 
 export default function ActionCardsPage() {

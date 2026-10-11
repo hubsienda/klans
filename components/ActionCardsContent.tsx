@@ -10,7 +10,7 @@ export function ActionCardsContent() {
   return (
     <main className="site-container py-10 sm:py-14">
       <header className="max-w-3xl">
-        <p className="eyebrow">KLANS</p>
+        <p className="eyebrow">KLANZ</p>
         <h1 className="section-title">{t(language, 'actionCards')}</h1>
         <p className="mt-4 text-base leading-7 text-[var(--muted)]">{t(language, 'actionPageIntro')}</p>
       </header>

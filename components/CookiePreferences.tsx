@@ -26,13 +26,13 @@ export function CookiePreferences({ language, initialOptional, onSave, onClose }
   const copy = language === 'en'
     ? {
         title: 'Cookie preferences',
-        intro: 'Choose how KLANS should handle optional technologies. Necessary browser storage remains active because it remembers choices you explicitly make on the site.',
+        intro: 'Choose how KLANZ should handle optional technologies. Necessary browser storage remains active because it remembers choices you explicitly make on the site.',
         necessaryTitle: 'Necessary browser storage',
         necessaryStatus: 'Always active',
         necessaryText: 'Used for language, light/dark theme and your consent preference. These settings are stored locally in your browser.',
         optionalTitle: 'Optional technologies',
         optionalStatus: 'None currently in use',
-        optionalText: 'KLANS currently does not load analytics, advertising pixels, marketing trackers or other optional tracking technologies. This preference is stored so the consent system can record your choice.',
+        optionalText: 'KLANZ currently does not load analytics, advertising pixels, marketing trackers or other optional tracking technologies. This preference is stored so the consent system can record your choice.',
         allow: 'Allow optional technologies',
         block: 'Keep optional technologies off',
         save: 'Save preferences',
@@ -40,13 +40,13 @@ export function CookiePreferences({ language, initialOptional, onSave, onClose }
       }
     : {
         title: 'Preferencias de cookies',
-        intro: 'Elige cómo debe gestionar KLANS las tecnologías opcionales. El almacenamiento necesario del navegador permanece activo porque recuerda las elecciones que realizas expresamente en el sitio.',
+        intro: 'Elige cómo debe gestionar KLANZ las tecnologías opcionales. El almacenamiento necesario del navegador permanece activo porque recuerda las elecciones que realizas expresamente en el sitio.',
         necessaryTitle: 'Almacenamiento necesario del navegador',
         necessaryStatus: 'Siempre activo',
         necessaryText: 'Se utiliza para el idioma, el tema claro/oscuro y tu preferencia de consentimiento. Estos ajustes se guardan localmente en tu navegador.',
         optionalTitle: 'Tecnologías opcionales',
         optionalStatus: 'Actualmente no se utiliza ninguna',
-        optionalText: 'KLANS no carga actualmente analítica, píxeles publicitarios, rastreadores de marketing ni otras tecnologías opcionales de seguimiento. Esta preferencia se guarda para que el sistema de consentimiento pueda registrar tu elección.',
+        optionalText: 'KLANZ no carga actualmente analítica, píxeles publicitarios, rastreadores de marketing ni otras tecnologías opcionales de seguimiento. Esta preferencia se guarda para que el sistema de consentimiento pueda registrar tu elección.',
         allow: 'Permitir tecnologías opcionales',
         block: 'Mantener desactivadas las tecnologías opcionales',
         save: 'Guardar preferencias',
@@ -66,7 +66,7 @@ export function CookiePreferences({ language, initialOptional, onSave, onClose }
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="eyebrow">KLANS</p>
+            <p className="eyebrow">KLANZ</p>
             <h2 id="cookie-preferences-title" className="mt-1 text-2xl font-semibold">{copy.title}</h2>
           </div>
           <button ref={closeRef} className="icon-button shrink-0" onClick={onClose} aria-label={copy.close}>×</button>

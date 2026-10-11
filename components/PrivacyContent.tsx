@@ -9,20 +9,20 @@ export function PrivacyContent() {
   const sections = language === 'en'
     ? [
         {
-          title: '1. What KLANS is',
-          body: 'KLANS is a website for the KLANS tabletop card game and a Human-vs-Computer browser adaptation. The online game runs locally in the browser and does not require an account, login or server-side player profile.',
+          title: '1. What KLANZ is',
+          body: 'KLANZ is a website for the KLANZ tabletop card game and a Human-vs-Computer browser adaptation. The online game runs locally in the browser and does not require an account, login or server-side player profile.',
         },
         {
           title: '2. Technical information when you visit',
-          body: 'Like ordinary websites, the hosting and delivery infrastructure may process standard technical request information needed to deliver, secure and diagnose the site. This can include an IP address, requested URL, date and time, browser or user-agent information and security or error logs. The KLANS application code does not use this information to create advertising profiles.',
+          body: 'Like ordinary websites, the hosting and delivery infrastructure may process standard technical request information needed to deliver, secure and diagnose the site. This can include an IP address, requested URL, date and time, browser or user-agent information and security or error logs. The KLANZ application code does not use this information to create advertising profiles.',
         },
         {
           title: '3. Browser storage',
-          body: 'KLANS uses localStorage to remember the language you choose, the light or dark theme you choose, and your cookie/privacy consent preference. The current online match state is held in browser memory while you play and is not persisted by this implementation as a player account or server-side game record.',
+          body: 'KLANZ uses localStorage to remember the language you choose, the light or dark theme you choose, and your cookie/privacy consent preference. The current online match state is held in browser memory while you play and is not persisted by this implementation as a player account or server-side game record.',
         },
         {
           title: '4. Analytics and optional technologies',
-          body: 'KLANS currently does not include Google Analytics, Meta Pixel, advertising cookies, marketing trackers or other optional analytics/tracking technologies. Optional technologies must not be activated before the relevant consent is granted. The site fonts are self-hosted by the deployed application rather than loaded from Google Fonts in the visitor browser.',
+          body: 'KLANZ currently does not include Google Analytics, Meta Pixel, advertising cookies, marketing trackers or other optional analytics/tracking technologies. Optional technologies must not be activated before the relevant consent is granted. The site fonts are self-hosted by the deployed application rather than loaded from Google Fonts in the visitor browser.',
         },
         {
           title: '5. Consent preferences',
@@ -30,7 +30,7 @@ export function PrivacyContent() {
         },
         {
           title: '6. External links',
-          body: 'The site may link to external websites, including Naralimon. External sites have their own privacy practices. KLANS does not control those sites, and information is not sent to an external site merely because a normal text link is displayed; navigation occurs when you choose to follow the link.',
+          body: 'The site may link to external websites, including Naralimon. External sites have their own privacy practices. KLANZ does not control those sites, and information is not sent to an external site merely because a normal text link is displayed; navigation occurs when you choose to follow the link.',
         },
         {
           title: '7. Your privacy rights',
@@ -38,25 +38,25 @@ export function PrivacyContent() {
         },
         {
           title: '8. Copyright ownership',
-          body: 'Naralimon s.c. is the copyright owner of KLANS. KLANS, its rules, game system, names, artwork and associated game materials are protected by copyright and are not presented as public-domain material or as content available for unrestricted reuse.',
+          body: 'Naralimon s.c. is the copyright owner of KLANZ. KLANZ, its rules, game system, names, artwork and associated game materials are protected by copyright and are not presented as public-domain material or as content available for unrestricted reuse.',
         },
       ]
     : [
         {
-          title: '1. Qué es KLANS',
-          body: 'KLANS es un sitio web dedicado al juego de cartas de mesa KLANS y a una adaptación Humano contra Ordenador que funciona en el navegador. El juego online se ejecuta localmente en el navegador y no requiere cuenta, inicio de sesión ni perfil de jugador en el servidor.',
+          title: '1. Qué es KLANZ',
+          body: 'KLANZ es un sitio web dedicado al juego de cartas de mesa KLANZ y a una adaptación Humano contra Ordenador que funciona en el navegador. El juego online se ejecuta localmente en el navegador y no requiere cuenta, inicio de sesión ni perfil de jugador en el servidor.',
         },
         {
           title: '2. Información técnica al visitar el sitio',
-          body: 'Como ocurre con los sitios web normales, la infraestructura de alojamiento y entrega puede tratar información técnica estándar necesaria para servir, proteger y diagnosticar el sitio. Puede incluir la dirección IP, la URL solicitada, fecha y hora, información del navegador o user-agent y registros de seguridad o errores. El código de la aplicación KLANS no utiliza esta información para crear perfiles publicitarios.',
+          body: 'Como ocurre con los sitios web normales, la infraestructura de alojamiento y entrega puede tratar información técnica estándar necesaria para servir, proteger y diagnosticar el sitio. Puede incluir la dirección IP, la URL solicitada, fecha y hora, información del navegador o user-agent y registros de seguridad o errores. El código de la aplicación KLANZ no utiliza esta información para crear perfiles publicitarios.',
         },
         {
           title: '3. Almacenamiento del navegador',
-          body: 'KLANS utiliza localStorage para recordar el idioma elegido, el tema claro u oscuro elegido y tu preferencia de consentimiento de privacidad/cookies. El estado de la partida online actual se mantiene en la memoria del navegador mientras juegas y esta implementación no lo conserva como cuenta de jugador ni como registro de partida en el servidor.',
+          body: 'KLANZ utiliza localStorage para recordar el idioma elegido, el tema claro u oscuro elegido y tu preferencia de consentimiento de privacidad/cookies. El estado de la partida online actual se mantiene en la memoria del navegador mientras juegas y esta implementación no lo conserva como cuenta de jugador ni como registro de partida en el servidor.',
         },
         {
           title: '4. Analítica y tecnologías opcionales',
-          body: 'KLANS no incluye actualmente Google Analytics, Meta Pixel, cookies publicitarias, rastreadores de marketing ni otras tecnologías opcionales de analítica o seguimiento. Las tecnologías opcionales no deben activarse antes de obtener el consentimiento correspondiente. Las fuentes del sitio son servidas por la propia aplicación desplegada y no se cargan desde Google Fonts en el navegador del visitante.',
+          body: 'KLANZ no incluye actualmente Google Analytics, Meta Pixel, cookies publicitarias, rastreadores de marketing ni otras tecnologías opcionales de analítica o seguimiento. Las tecnologías opcionales no deben activarse antes de obtener el consentimiento correspondiente. Las fuentes del sitio son servidas por la propia aplicación desplegada y no se cargan desde Google Fonts en el navegador del visitante.',
         },
         {
           title: '5. Preferencias de consentimiento',
@@ -64,7 +64,7 @@ export function PrivacyContent() {
         },
         {
           title: '6. Enlaces externos',
-          body: 'El sitio puede enlazar a páginas externas, incluida Naralimon. Esos sitios tienen sus propias prácticas de privacidad. KLANS no controla esos sitios y no se envía información a un sitio externo simplemente porque se muestre un enlace de texto normal; la navegación se produce cuando decides seguir el enlace.',
+          body: 'El sitio puede enlazar a páginas externas, incluida Naralimon. Esos sitios tienen sus propias prácticas de privacidad. KLANZ no controla esos sitios y no se envía información a un sitio externo simplemente porque se muestre un enlace de texto normal; la navegación se produce cuando decides seguir el enlace.',
         },
         {
           title: '7. Tus derechos de privacidad',
@@ -72,7 +72,7 @@ export function PrivacyContent() {
         },
         {
           title: '8. Titularidad de los derechos de autor',
-          body: 'Naralimon s.c. es el titular de los derechos de autor de KLANS. KLANS, sus reglas, sistema de juego, nombres, ilustraciones y materiales asociados están protegidos por derechos de autor y no se presentan como material de dominio público ni como contenido disponible para reutilización sin restricciones.',
+          body: 'Naralimon s.c. es el titular de los derechos de autor de KLANZ. KLANZ, sus reglas, sistema de juego, nombres, ilustraciones y materiales asociados están protegidos por derechos de autor y no se presentan como material de dominio público ni como contenido disponible para reutilización sin restricciones.',
         },
       ];
 
@@ -87,12 +87,12 @@ export function PrivacyContent() {
   return (
     <main className="site-container py-10 sm:py-14">
       <header className="max-w-3xl">
-        <p className="eyebrow">KLANS</p>
+        <p className="eyebrow">KLANZ</p>
         <h1 className="section-title">{language === 'en' ? 'Privacy Policy' : 'Política de Privacidad'}</h1>
         <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
           {language === 'en'
-            ? 'This policy explains how the KLANS website and browser game handle information and browser-side preferences.'
-            : 'Esta política explica cómo el sitio web y el juego de navegador de KLANS tratan la información y las preferencias guardadas en el navegador.'}
+            ? 'This policy explains how the KLANZ website and browser game handle information and browser-side preferences.'
+            : 'Esta política explica cómo el sitio web y el juego de navegador de KLANZ tratan la información y las preferencias guardadas en el navegador.'}
         </p>
         <p className="mt-2 text-xs text-[var(--muted)]">{language === 'en' ? 'Last updated: 5 October 2026' : 'Última actualización: 5 de octubre de 2026'}</p>
       </header>

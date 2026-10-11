@@ -23,8 +23,8 @@ export function HomeContent() {
       <section className="hero-section">
         <div className="site-container grid items-center gap-10 py-14 lg:grid-cols-[1.1fr_.9fr] lg:py-20">
           <div>
-            <p className="eyebrow">KLANS</p>
-            <Image src="/logo.png" alt="KLANS" width={760} height={250} className="mt-5 h-auto w-full max-w-2xl object-contain" priority />
+            <p className="eyebrow">KLANZ</p>
+            <Image src="/logo.png" alt="KLANZ" width={760} height={250} className="mt-5 h-auto w-full max-w-2xl object-contain" priority />
             <h1 className="mt-7 max-w-3xl font-cinzel text-3xl font-semibold leading-tight sm:text-5xl">{copy('homeHero')}</h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-[var(--muted)] sm:text-lg">{copy('homeIntro')}</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">

@@ -3,7 +3,7 @@ import { FactionsContent } from '@/components/FactionsContent';
 
 export const metadata: Metadata = {
   title: 'Factions',
-  description: 'Explore the ROMAN, VIKING, EGYPT and SAMURAI factions and all twenty KLANS units.',
+  description: 'Explore the ROMAN, VIKING, EGYPT and SAMURAI factions and all twenty KLANZ units.',
 };
 
 export default function FactionsPage() {
