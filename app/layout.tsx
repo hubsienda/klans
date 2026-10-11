@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Cinzel, Inter } from 'next/font/google';
 import { SiteProvider } from '@/components/SiteProvider';
+import { SITE_ORIGIN } from '@/lib/site';
 import './globals.css';
 
 const inter = Inter({
@@ -19,6 +20,7 @@ const cinzel = Cinzel({
 const currentYear = new Date().getFullYear();
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_ORIGIN),
   title: {
     default: 'KLANZ — Strategic Card Game',
     template: '%s | KLANZ',
