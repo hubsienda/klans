@@ -20,6 +20,14 @@ The App Router site contains seven routes:
 
 The entire site supports English/Spanish and light/dark themes.
 
+## Public domain
+
+The canonical public domain is:
+
+`https://klanz.naralimon.com`
+
+The legacy public domain `https://klans.naralimon.com` is retained only for permanent path-preserving redirects to the canonical domain. The technical Vercel deployment may remain at `https://klans.vercel.app`, and the GitHub repository remains `hubsienda/klans`.
+
 ## Online adaptation
 
 The browser game is intentionally solo: one human against one rule-based computer. It uses only the two active factions, so the online common deck contains 40 action cards.
