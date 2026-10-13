@@ -14,7 +14,7 @@ export function CookieBanner({ language, onAccept, onReject, onPreferences }: Co
   const copy = language === 'en'
     ? {
         label: 'Cookie and privacy notice',
-        text: 'We use necessary browser storage for site functionality and, where enabled, optional cookies or similar technologies. You can accept, reject or manage your preferences.',
+        text: 'KLANZ uses necessary browser storage to remember site preferences and consent. No optional analytics or marketing technologies are currently enabled. You can accept, reject or manage your preference.',
         privacy: 'Privacy Policy',
         cookies: 'Cookie Policy',
         accept: 'Accept',
@@ -23,7 +23,7 @@ export function CookieBanner({ language, onAccept, onReject, onPreferences }: Co
       }
     : {
         label: 'Aviso de privacidad y cookies',
-        text: 'Utilizamos almacenamiento necesario del navegador para el funcionamiento del sitio y, cuando estén habilitadas, cookies u otras tecnologías opcionales. Puedes aceptar, rechazar o gestionar tus preferencias.',
+        text: 'KLANZ utiliza almacenamiento necesario del navegador para recordar preferencias del sitio y el consentimiento. Actualmente no hay tecnologías opcionales de analítica o marketing habilitadas. Puedes aceptar, rechazar o gestionar tu preferencia.',
         privacy: 'Política de Privacidad',
         cookies: 'Política de Cookies',
         accept: 'Aceptar',

@@ -4,7 +4,7 @@ KLANZ is the website and browser adaptation for the KLANZ tabletop card game.
 
 ## Copyright
 
-Naralimon s.c. is the copyright owner of KLANZ. KLANZ, its rules, game system, names, artwork and associated game materials are protected by copyright. All rights reserved.
+Naralimon S.C. is the copyright owner of KLANZ. KLANZ, its rules, game system, names, artwork and associated game materials are protected by copyright. All rights reserved.
 
 ## Website
 

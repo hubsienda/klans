@@ -26,7 +26,7 @@ export function CookiePreferences({ language, initialOptional, onSave, onClose }
   const copy = language === 'en'
     ? {
         title: 'Cookie preferences',
-        intro: 'Choose how KLANZ should handle optional technologies. Necessary browser storage remains active because it remembers choices you explicitly make on the site.',
+        intro: 'No optional tracking technology is currently in use. This panel records your preference for optional technologies, while necessary browser storage remains active to remember choices you explicitly make on the site.',
         necessaryTitle: 'Necessary browser storage',
         necessaryStatus: 'Always active',
         necessaryText: 'Used for language, light/dark theme and your consent preference. These settings are stored locally in your browser.',
@@ -40,7 +40,7 @@ export function CookiePreferences({ language, initialOptional, onSave, onClose }
       }
     : {
         title: 'Preferencias de cookies',
-        intro: 'Elige cómo debe gestionar KLANZ las tecnologías opcionales. El almacenamiento necesario del navegador permanece activo porque recuerda las elecciones que realizas expresamente en el sitio.',
+        intro: 'Actualmente no se utiliza ninguna tecnología opcional de seguimiento. Este panel registra tu preferencia sobre tecnologías opcionales, mientras el almacenamiento necesario del navegador permanece activo para recordar las elecciones que realizas expresamente en el sitio.',
         necessaryTitle: 'Almacenamiento necesario del navegador',
         necessaryStatus: 'Siempre activo',
         necessaryText: 'Se utiliza para el idioma, el tema claro/oscuro y tu preferencia de consentimiento. Estos ajustes se guardan localmente en tu navegador.',
