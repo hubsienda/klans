@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Cinzel, Inter } from 'next/font/google';
 import { SiteProvider } from '@/components/SiteProvider';
+import { COMPANY_NAME } from '@/lib/legal';
 import { SITE_ORIGIN } from '@/lib/site';
 import './globals.css';
 
@@ -26,10 +27,10 @@ export const metadata: Metadata = {
     template: '%s | KLANZ',
   },
   description: 'KLANZ is a strategic faction card game of survival, conquest, diplomacy and betrayal, with a Human-vs-Computer browser adaptation.',
-  creator: 'Naralimon s.c.',
-  publisher: 'Naralimon s.c.',
+  creator: COMPANY_NAME,
+  publisher: COMPANY_NAME,
   other: {
-    copyright: `© ${currentYear} Naralimon s.c. KLANZ. All rights reserved.`,
+    copyright: `© ${currentYear} ${COMPANY_NAME} KLANZ. All rights reserved.`,
   },
   icons: { icon: '/favicon.png', shortcut: '/favicon.png', apple: '/favicon.png' },
 };
