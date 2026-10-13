@@ -1,6 +1,7 @@
 'use client';
 
 import { RULE_SECTIONS } from '@/lib/content';
+import { COMPANY_NAME } from '@/lib/legal';
 import { t } from '@/lib/i18n';
 import { useSite } from './SiteProvider';
 
@@ -8,8 +9,8 @@ export function RulesContent() {
   const { language } = useSite();
   const currentYear = new Date().getFullYear();
   const copyrightNotice = language === 'en'
-    ? `KLANZ, its rules, game system, names, artwork and associated game materials are protected by copyright. © ${currentYear} Naralimon s.c. All rights reserved.`
-    : `KLANZ, sus reglas, sistema de juego, nombres, ilustraciones y materiales asociados están protegidos por derechos de autor. © ${currentYear} Naralimon s.c. Todos los derechos reservados.`;
+    ? `KLANZ, its rules, game system, names, artwork and associated game materials are protected by copyright. © ${currentYear} ${COMPANY_NAME} All rights reserved.`
+    : `KLANZ, sus reglas, sistema de juego, nombres, ilustraciones y materiales asociados están protegidos por derechos de autor. © ${currentYear} ${COMPANY_NAME} Todos los derechos reservados.`;
 
   return (
     <main className="site-container py-10 sm:py-14">
