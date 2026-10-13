@@ -63,7 +63,7 @@ export function PrivacyContent() {
         },
         {
           title: '7. Recipients and service providers',
-          body: 'Limited information may be processed by technical service providers where necessary to host, deliver, secure or maintain the website. KLANZ is deployed using Vercel infrastructure. Service providers do not become owners of KLANZ by providing technical services. The current application does not integrate advertising networks, marketing platforms or analytics services, and Naralimon S.C. does not state that personal data is sold.',
+          body: 'Limited information may be processed by technical service providers where necessary to host, deliver, secure or maintain the website. KLANZ is deployed using Vercel infrastructure. Service providers do not become owners of KLANZ by providing technical services. The current application does not integrate advertising networks, marketing platforms or analytics services.',
         },
         {
           title: '8. International transfers',
@@ -139,7 +139,7 @@ export function PrivacyContent() {
         },
         {
           title: '7. Destinatarios y proveedores de servicios',
-          body: 'Determinada información limitada puede ser tratada por proveedores técnicos cuando sea necesario para alojar, servir, proteger o mantener el sitio web. KLANZ se despliega mediante infraestructura de Vercel. Los proveedores de servicios no se convierten en propietarios de KLANZ por prestar servicios técnicos. La aplicación actual no integra redes publicitarias, plataformas de marketing ni servicios de analítica, y Naralimon S.C. no afirma que venda datos personales.',
+          body: 'Determinada información limitada puede ser tratada por proveedores técnicos cuando sea necesario para alojar, servir, proteger o mantener el sitio web. KLANZ se despliega mediante infraestructura de Vercel. Los proveedores de servicios no se convierten en propietarios de KLANZ por prestar servicios técnicos. La aplicación actual no integra redes publicitarias, plataformas de marketing ni servicios de analítica.',
         },
         {
           title: '8. Transferencias internacionales',
